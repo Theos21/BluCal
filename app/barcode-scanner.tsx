@@ -11,7 +11,11 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
-import { CameraView, useCameraPermissions } from 'expo-camera';
+import {
+  CameraView,
+  useCameraPermissions,
+  type BarcodeScanningResult,
+} from 'expo-camera';
 import { radius, space, type as typo, useTheme } from '../lib/theme';
 import Toast from '../components/Toast';
 import { useToast } from '../lib/useToast';
@@ -332,7 +336,8 @@ export default function BarcodeScanner() {
     }).start();
   }, [sheetVisible, sheetY, screenH]);
 
-  const handleBarcodeScanned = async ({ data }: { data: string }) => {
+  const handleBarcodeScanned = async (result: BarcodeScanningResult) => {
+    const { data } = result;
     if (lookingUp || scannedProduct || notFound) return;
     setLookingUp(true);
     setLastBarcode(data);
@@ -458,7 +463,15 @@ export default function BarcodeScanner() {
         facing="back"
         enableTorch={torchOn}
         barcodeScannerSettings={{
-          barcodeTypes: ['ean13', 'ean8', 'upc_a', 'upc_e', 'code128', 'code39'],
+          barcodeTypes: [
+            'ean13',
+            'ean8',
+            'upc_a',
+            'upc_e',
+            'code128',
+            'code39',
+            'qr',
+          ],
         }}
         onBarcodeScanned={sheetVisible || lookingUp ? undefined : handleBarcodeScanned}
       />

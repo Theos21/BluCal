@@ -2,13 +2,14 @@ import { useCallback, useEffect, useState } from 'react';
 import {
   Alert,
   Linking,
+  Modal,
   Pressable,
   ScrollView,
   Switch,
   Text,
   View,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { router, useFocusEffect } from 'expo-router';
 import Svg, { Circle, G } from 'react-native-svg';
@@ -61,6 +62,199 @@ function formatGoalWeight(
   if (kg === null || kg === undefined) return 'Not set';
   if (isMetric) return `${kg.toFixed(1)} kg`;
   return `${(kg * 2.20462).toFixed(1)} lbs`;
+}
+
+function formatHour12(hour24: number): string {
+  const h = hour24 % 12 === 0 ? 12 : hour24 % 12;
+  const period = hour24 >= 12 ? 'PM' : 'AM';
+  return `${h}:00 ${period}`;
+}
+
+function TimePickerSheet({
+  visible,
+  title,
+  initialHour24,
+  onClose,
+  onSave,
+}: {
+  visible: boolean;
+  title: string;
+  initialHour24: number;
+  onClose: () => void;
+  onSave: (hour24: number) => void;
+}) {
+  const t = useTheme();
+  const insets = useSafeAreaInsets();
+  const [hour12, setHour12] = useState(
+    initialHour24 % 12 === 0 ? 12 : initialHour24 % 12,
+  );
+  const [period, setPeriod] = useState<'AM' | 'PM'>(
+    initialHour24 >= 12 ? 'PM' : 'AM',
+  );
+
+  useEffect(() => {
+    if (!visible) return;
+    setHour12(initialHour24 % 12 === 0 ? 12 : initialHour24 % 12);
+    setPeriod(initialHour24 >= 12 ? 'PM' : 'AM');
+  }, [visible, initialHour24]);
+
+  const handleSave = () => {
+    const h12 = hour12 % 12; // 12 → 0
+    const hour24 = period === 'PM' ? h12 + 12 : h12;
+    onSave(hour24);
+  };
+
+  return (
+    <Modal
+      visible={visible}
+      transparent
+      animationType="slide"
+      onRequestClose={onClose}
+    >
+      <Pressable
+        onPress={onClose}
+        style={{
+          flex: 1,
+          backgroundColor: t.scrim,
+          justifyContent: 'flex-end',
+        }}
+      >
+        <Pressable
+          onPress={(e) => e.stopPropagation()}
+          style={{
+            backgroundColor: t.surface,
+            borderTopLeftRadius: radius.xl,
+            borderTopRightRadius: radius.xl,
+            paddingHorizontal: space.xl,
+            paddingTop: space.lg,
+            paddingBottom: insets.bottom + space.xl,
+          }}
+        >
+          <View style={{ alignItems: 'center' }}>
+            <View
+              style={{
+                width: 36,
+                height: 4,
+                borderRadius: radius.pill,
+                backgroundColor: t.surface3,
+              }}
+            />
+          </View>
+          <Text
+            style={[
+              typo.title3,
+              { color: t.text, textAlign: 'center', marginTop: space.lg },
+            ]}
+          >
+            {title}
+          </Text>
+
+          {/* Hour grid 1-12 */}
+          <View
+            style={{
+              flexDirection: 'row',
+              flexWrap: 'wrap',
+              gap: space.sm,
+              marginTop: space.xl,
+              justifyContent: 'center',
+            }}
+          >
+            {Array.from({ length: 12 }, (_, i) => i + 1).map((h) => {
+              const sel = h === hour12;
+              return (
+                <Pressable
+                  key={h}
+                  onPress={() => setHour12(h)}
+                  style={({ pressed }) => ({
+                    width: 56,
+                    height: 44,
+                    borderRadius: radius.md,
+                    backgroundColor: sel ? t.primary : t.surface2,
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    opacity: pressed ? 0.7 : 1,
+                  })}
+                >
+                  <Text
+                    style={[
+                      typo.subheadEm,
+                      { color: sel ? t.textOnPrim : t.text },
+                    ]}
+                  >
+                    {h}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </View>
+
+          {/* AM / PM */}
+          <View
+            style={{
+              flexDirection: 'row',
+              backgroundColor: t.surface2,
+              borderRadius: radius.lg,
+              padding: 3,
+              marginTop: space.lg,
+            }}
+          >
+            {(['AM', 'PM'] as const).map((p) => {
+              const sel = period === p;
+              return (
+                <Pressable
+                  key={p}
+                  onPress={() => setPeriod(p)}
+                  style={({ pressed }) => ({
+                    flex: 1,
+                    paddingVertical: 10,
+                    borderRadius: radius.md,
+                    backgroundColor: sel ? t.surface : 'transparent',
+                    alignItems: 'center',
+                    opacity: pressed ? 0.7 : 1,
+                  })}
+                >
+                  <Text
+                    style={[
+                      typo.subheadEm,
+                      { color: sel ? t.text : t.textTer },
+                    ]}
+                  >
+                    {p}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </View>
+
+          <Pressable
+            onPress={handleSave}
+            style={({ pressed }) => ({
+              marginTop: space.xl,
+              height: 52,
+              borderRadius: radius.lg,
+              backgroundColor: t.primary,
+              alignItems: 'center',
+              justifyContent: 'center',
+              opacity: pressed ? 0.85 : 1,
+            })}
+          >
+            <Text style={[typo.headline, { color: t.textOnPrim }]}>Save</Text>
+          </Pressable>
+          <Pressable
+            hitSlop={6}
+            onPress={onClose}
+            style={({ pressed }) => ({
+              alignSelf: 'center',
+              marginTop: space.md,
+              opacity: pressed ? 0.6 : 1,
+            })}
+          >
+            <Text style={[typo.subhead, { color: t.textSec }]}>Cancel</Text>
+          </Pressable>
+        </Pressable>
+      </Pressable>
+    </Modal>
+  );
 }
 
 // ── Reusable rows + sections ─────────────────────────────────────────────────
@@ -416,6 +610,15 @@ export default function Profile() {
   const [streakAlerts, setStreakAlerts] = useState(
     profile?.notif_streak_alerts ?? false,
   );
+  const [timePickerOpen, setTimePickerOpen] = useState<
+    'log' | 'weighIn' | null
+  >(null);
+  const [logReminderHour, setLogReminderHour] = useState(
+    profile?.notif_log_reminder_hour ?? 20,
+  );
+  const [weighInHour, setWeighInHour] = useState(
+    profile?.notif_weigh_in_hour ?? 7,
+  );
 
   // Sync toggles whenever the profile's notification fields change (e.g.,
   // after sign-in or a refresh from another device).
@@ -425,12 +628,50 @@ export default function Profile() {
     setWeighInReminder(profile.notif_weigh_in ?? true);
     setWeeklySummary(profile.notif_weekly_summary ?? true);
     setStreakAlerts(profile.notif_streak_alerts ?? false);
+    setLogReminderHour(profile.notif_log_reminder_hour ?? 20);
+    setWeighInHour(profile.notif_weigh_in_hour ?? 7);
   }, [
     profile?.notif_log_reminder,
     profile?.notif_weigh_in,
     profile?.notif_weekly_summary,
     profile?.notif_streak_alerts,
+    profile?.notif_log_reminder_hour,
+    profile?.notif_weigh_in_hour,
   ]);
+
+  const handleSaveLogReminderTime = async (hour24: number) => {
+    setLogReminderHour(hour24);
+    setTimePickerOpen(null);
+    if (!user) return;
+    try {
+      await updateProfile(user.id, { notif_log_reminder_hour: hour24 });
+      if (logReminder) {
+        await cancelAllNotifications();
+        await scheduleDailyLogReminder(hour24, 0);
+        if (weighInReminder) await scheduleWeighInReminder(weighInHour, 0);
+        if (weeklySummary) await scheduleWeeklySummary();
+      }
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const handleSaveWeighInTime = async (hour24: number) => {
+    setWeighInHour(hour24);
+    setTimePickerOpen(null);
+    if (!user) return;
+    try {
+      await updateProfile(user.id, { notif_weigh_in_hour: hour24 });
+      if (weighInReminder) {
+        await cancelAllNotifications();
+        if (logReminder) await scheduleDailyLogReminder(logReminderHour, 0);
+        await scheduleWeighInReminder(hour24, 0);
+        if (weeklySummary) await scheduleWeeklySummary();
+      }
+    } catch (e) {
+      console.error(e);
+    }
+  };
 
   const handleLogReminderToggle = async (val: boolean) => {
     setLogReminder(val);
@@ -671,11 +912,25 @@ export default function Profile() {
             switchValue={logReminder}
             onSwitchChange={handleLogReminderToggle}
           />
+          {logReminder && (
+            <SettingsRow
+              label="Reminder time"
+              value={formatHour12(logReminderHour)}
+              onPress={() => setTimePickerOpen('log')}
+            />
+          )}
           <SettingsRow
             label="Weigh-in reminder"
             switchValue={weighInReminder}
             onSwitchChange={handleWeighInToggle}
           />
+          {weighInReminder && (
+            <SettingsRow
+              label="Reminder time"
+              value={formatHour12(weighInHour)}
+              onPress={() => setTimePickerOpen('weighIn')}
+            />
+          )}
           <SettingsRow
             label="Weekly coach summary"
             switchValue={weeklySummary}
@@ -785,6 +1040,21 @@ export default function Profile() {
           {`BluCal v${APP_VERSION}`}
         </Text>
       </ScrollView>
+
+      <TimePickerSheet
+        visible={timePickerOpen === 'log'}
+        title="Daily log reminder"
+        initialHour24={logReminderHour}
+        onClose={() => setTimePickerOpen(null)}
+        onSave={handleSaveLogReminderTime}
+      />
+      <TimePickerSheet
+        visible={timePickerOpen === 'weighIn'}
+        title="Weigh-in reminder"
+        initialHour24={weighInHour}
+        onClose={() => setTimePickerOpen(null)}
+        onSave={handleSaveWeighInTime}
+      />
 
       <Toast
         message={toast.message}

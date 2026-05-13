@@ -3,6 +3,7 @@
 
 let _feelingDismissed = false;
 let _justLoggedFood: string | null = null;
+let _celebrationDismissedForStreak: number = 0;
 
 export const sessionState = {
   getFeelingDismissed: () => _feelingDismissed,
@@ -12,5 +13,9 @@ export const sessionState = {
   getJustLoggedFood: () => _justLoggedFood,
   setJustLoggedFood: (name: string | null) => {
     _justLoggedFood = name;
+  },
+  getCelebrationDismissedForStreak: () => _celebrationDismissedForStreak,
+  setCelebrationDismissedForStreak: (streak: number) => {
+    _celebrationDismissedForStreak = streak;
   },
 };

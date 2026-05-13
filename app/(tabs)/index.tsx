@@ -638,9 +638,17 @@ export default function Today() {
   const [showCelebration, setShowCelebration] = useState(false);
 
   useEffect(() => {
-    if (streak === 7 || streak === 14 || streak === 30) {
+    if (
+      (streak === 7 || streak === 14 || streak === 30) &&
+      sessionState.getCelebrationDismissedForStreak() !== streak
+    ) {
       setShowCelebration(true);
     }
+  }, [streak]);
+
+  const handleCelebrationClose = useCallback(() => {
+    setShowCelebration(false);
+    sessionState.setCelebrationDismissedForStreak(streak);
   }, [streak]);
 
   const bounceY = useRef(new Animated.Value(0)).current;
@@ -904,7 +912,7 @@ export default function Today() {
 
       <StreakCelebration
         visible={showCelebration}
-        onClose={() => setShowCelebration(false)}
+        onClose={handleCelebrationClose}
         streakDays={streak}
       />
 

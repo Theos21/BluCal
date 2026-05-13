@@ -588,10 +588,29 @@ export default function EditMacros() {
     toast.show('Reset to recommended targets', 'info');
   };
 
-  const handleSave = () => {
-    if (exceeds) return;
-    toast.show('Macro targets saved');
-    setTimeout(() => router.back(), 800);
+  const [savingCustom, setSavingCustom] = useState(false);
+
+  const handleSave = async () => {
+    if (!user || exceeds || savingCustom) return;
+    setSavingCustom(true);
+    try {
+      await setMacroTarget({
+        user_id: user.id,
+        calories: calNum,
+        protein_g: pNum,
+        carbs_g: cNum,
+        fat_g: fNum,
+        is_custom: true,
+        net_carbs: netCarbs,
+        effective_date: new Date().toISOString().split('T')[0],
+      });
+      toast.show('Macro targets saved', 'success');
+      setTimeout(() => router.back(), 800);
+    } catch {
+      toast.show('Could not save targets. Try again.', 'error');
+    } finally {
+      setSavingCustom(false);
+    }
   };
 
   const handleSaveRecommended = async () => {
@@ -1061,19 +1080,24 @@ export default function EditMacros() {
           >
             <Pressable
               onPress={handleSave}
-              disabled={exceeds}
+              disabled={exceeds || savingCustom}
               style={({ pressed }) => ({
                 height: 52,
                 borderRadius: radius.lg,
                 backgroundColor: t.primary,
                 alignItems: 'center',
                 justifyContent: 'center',
-                opacity: exceeds ? 0.4 : pressed ? 0.85 : 1,
+                opacity:
+                  exceeds || savingCustom ? 0.4 : pressed ? 0.85 : 1,
               })}
             >
-              <Text style={[typo.headline, { color: t.textOnPrim }]}>
-                Save
-              </Text>
+              {savingCustom ? (
+                <ActivityIndicator color={t.textOnPrim} />
+              ) : (
+                <Text style={[typo.headline, { color: t.textOnPrim }]}>
+                  Save
+                </Text>
+              )}
             </Pressable>
           </View>
         ) : (

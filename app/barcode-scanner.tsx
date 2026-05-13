@@ -152,10 +152,12 @@ function DragHandle() {
 function FoundSheetContent({
   product,
   onAdd,
+  onWrongProduct,
   saving,
 }: {
   product: FoodSearchResult;
   onAdd: (quantity: number) => void;
+  onWrongProduct: () => void;
   saving: boolean;
 }) {
   const t = useTheme();
@@ -244,6 +246,7 @@ function FoundSheetContent({
         )}
       </Pressable>
       <Pressable
+        onPress={onWrongProduct}
         style={({ pressed }) => ({
           marginTop: space.md,
           alignItems: 'center',
@@ -361,6 +364,12 @@ export default function BarcodeScanner() {
     setScannedProduct(null);
     setLookingUp(false);
     setLastBarcode('');
+  };
+
+  const handleWrongProduct = () => {
+    setScannedProduct(null);
+    setNotFound(false);
+    setLookingUp(false);
   };
 
   const handleAddToLog = async (quantity: number) => {
@@ -646,6 +655,7 @@ export default function BarcodeScanner() {
           <FoundSheetContent
             product={scannedProduct}
             onAdd={handleAddToLog}
+            onWrongProduct={handleWrongProduct}
             saving={saving}
           />
         )}

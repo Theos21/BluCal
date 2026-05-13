@@ -246,20 +246,11 @@ export default function BodyMeasurements() {
     );
   };
 
-  const handleAddPhoto = async () => {
+  const savePhoto = async (uri: string) => {
     if (!user) return;
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
-      quality: 0.8,
-      allowsEditing: true,
-      aspect: [3, 4],
-    });
-    if (result.canceled || !result.assets[0]) return;
-
-    const asset = result.assets[0];
     try {
       setUploading(true);
-      await addProgressPhoto(user.id, asset.uri, new Date().toISOString());
+      await addProgressPhoto(user.id, uri, new Date().toISOString());
       const updated = await getProgressPhotos(user.id);
       setPhotos(updated);
       toast.show('Photo saved', 'success');
@@ -269,6 +260,45 @@ export default function BodyMeasurements() {
     } finally {
       setUploading(false);
     }
+  };
+
+  const handleAddPhoto = () => {
+    if (!user) return;
+    Alert.alert('Add progress photo', 'Choose how to add your photo', [
+      {
+        text: 'Take photo',
+        onPress: async () => {
+          const perm = await ImagePicker.requestCameraPermissionsAsync();
+          if (!perm.granted) {
+            toast.show('Camera permission required.', 'info');
+            return;
+          }
+          const result = await ImagePicker.launchCameraAsync({
+            quality: 0.8,
+            allowsEditing: true,
+            aspect: [3, 4],
+          });
+          if (!result.canceled && result.assets[0]) {
+            await savePhoto(result.assets[0].uri);
+          }
+        },
+      },
+      {
+        text: 'Choose from library',
+        onPress: async () => {
+          const result = await ImagePicker.launchImageLibraryAsync({
+            mediaTypes: ImagePicker.MediaTypeOptions.Images,
+            quality: 0.8,
+            allowsEditing: true,
+            aspect: [3, 4],
+          });
+          if (!result.canceled && result.assets[0]) {
+            await savePhoto(result.assets[0].uri);
+          }
+        },
+      },
+      { text: 'Cancel', style: 'cancel' },
+    ]);
   };
 
   const handleDeletePhoto = (photo: ProgressPhotoWithUrl) => {

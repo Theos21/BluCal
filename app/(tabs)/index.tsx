@@ -1,14 +1,20 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
+  Alert,
   Animated,
+  Modal,
   Pressable,
   RefreshControl,
   ScrollView,
   Text,
+  TextInput,
   View,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import {
+  SafeAreaView,
+  useSafeAreaInsets,
+} from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { router, useFocusEffect } from 'expo-router';
 import { radius, space, type as typo, useTheme } from '../../lib/theme';
@@ -27,6 +33,8 @@ import {
   getFoodEntriesForDate,
   getStreak,
   getWaterForDate,
+  resetWaterForDate,
+  setWaterExact,
 } from '../../lib/db';
 import type { FoodEntry, MacroTarget } from '../../lib/types';
 
@@ -118,16 +126,19 @@ function WaterRow({
   oz,
   target,
   onAdd,
+  onOpenSheet,
 }: {
   oz: number;
   target: number;
   onAdd: (amount: number) => void;
+  onOpenSheet: () => void;
 }) {
   const t = useTheme();
   const pct = target > 0 ? Math.min(1, oz / target) : 0;
   return (
-    <View
-      style={{
+    <Pressable
+      onPress={onOpenSheet}
+      style={({ pressed }) => ({
         marginHorizontal: space.lg,
         marginTop: space.md,
         backgroundColor: t.surface,
@@ -138,7 +149,8 @@ function WaterRow({
         flexDirection: 'row',
         alignItems: 'center',
         gap: space.md,
-      }}
+        opacity: pressed ? 0.7 : 1,
+      })}
     >
       <View
         style={{
@@ -195,7 +207,7 @@ function WaterRow({
         <WaterPill label="+8oz" onPress={() => onAdd(8)} />
         <WaterPill label="+16oz" onPress={() => onAdd(16)} />
       </View>
-    </View>
+    </Pressable>
   );
 }
 
@@ -224,15 +236,237 @@ function LogFoodButton({ onPress }: { onPress?: () => void }) {
   );
 }
 
+function WaterSheet({
+  visible,
+  oz,
+  target,
+  inputValue,
+  onChangeInput,
+  onClose,
+  onAdd,
+  onSetExact,
+  onReset,
+}: {
+  visible: boolean;
+  oz: number;
+  target: number;
+  inputValue: string;
+  onChangeInput: (v: string) => void;
+  onClose: () => void;
+  onAdd: (amount: number) => void;
+  onSetExact: () => void;
+  onReset: () => void;
+}) {
+  const t = useTheme();
+  const insets = useSafeAreaInsets();
+  const pct = target > 0 ? Math.min(1, oz / target) : 0;
+
+  return (
+    <Modal
+      visible={visible}
+      transparent
+      animationType="slide"
+      onRequestClose={onClose}
+    >
+      <Pressable
+        onPress={onClose}
+        style={{
+          flex: 1,
+          backgroundColor: t.scrim,
+          justifyContent: 'flex-end',
+        }}
+      >
+        <Pressable
+          onPress={(e) => e.stopPropagation()}
+          style={{
+            backgroundColor: t.surface,
+            borderTopLeftRadius: radius.xl,
+            borderTopRightRadius: radius.xl,
+            paddingHorizontal: space.xl,
+            paddingTop: space.lg,
+            paddingBottom: insets.bottom + space.xl,
+          }}
+        >
+          <View style={{ alignItems: 'center' }}>
+            <View
+              style={{
+                width: 36,
+                height: 4,
+                borderRadius: radius.pill,
+                backgroundColor: t.surface3,
+              }}
+            />
+          </View>
+
+          <Text
+            style={[
+              typo.title3,
+              { color: t.text, marginTop: space.lg },
+            ]}
+          >
+            Water intake
+          </Text>
+
+          <View style={{ marginTop: space.lg, flexDirection: 'row', alignItems: 'baseline' }}>
+            <Text
+              style={[
+                typo.largeTitle,
+                { color: t.primary, fontVariant: ['tabular-nums'] },
+              ]}
+            >
+              {`${oz} oz`}
+            </Text>
+            <Text
+              style={[
+                typo.subhead,
+                { color: t.textSec, marginLeft: space.sm },
+              ]}
+            >
+              {`/ ${target} oz goal`}
+            </Text>
+          </View>
+
+          <View
+            style={{
+              height: 4,
+              backgroundColor: t.surface2,
+              borderRadius: radius.pill,
+              marginTop: space.md,
+              overflow: 'hidden',
+            }}
+          >
+            <View
+              style={{
+                height: '100%',
+                width: `${pct * 100}%`,
+                backgroundColor: t.primary,
+                borderRadius: radius.pill,
+              }}
+            />
+          </View>
+
+          <Text
+            style={[
+              typo.caption2,
+              {
+                color: t.textTer,
+                letterSpacing: 0.06,
+                textTransform: 'uppercase',
+                fontWeight: '700',
+                marginTop: space.xl,
+              },
+            ]}
+          >
+            Quick add
+          </Text>
+          <View style={{ flexDirection: 'row', gap: space.sm, marginTop: space.sm }}>
+            {[8, 16, 32].map((amt) => (
+              <Pressable
+                key={amt}
+                onPress={() => onAdd(amt)}
+                style={({ pressed }) => ({
+                  flex: 1,
+                  height: 44,
+                  borderRadius: radius.md,
+                  backgroundColor: t.primarySoft,
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  opacity: pressed ? 0.6 : 1,
+                })}
+              >
+                <Text style={[typo.subheadEm, { color: t.primary }]}>
+                  {`+${amt}oz`}
+                </Text>
+              </Pressable>
+            ))}
+          </View>
+
+          <View
+            style={{
+              flexDirection: 'row',
+              alignItems: 'center',
+              gap: space.sm,
+              marginTop: space.xl,
+              paddingTop: space.md,
+              borderTopWidth: 0.5,
+              borderTopColor: t.hairline,
+            }}
+          >
+            <Text style={[typo.subhead, { color: t.textSec, flex: 1 }]}>
+              Set exact amount
+            </Text>
+            <TextInput
+              value={inputValue}
+              onChangeText={onChangeInput}
+              keyboardType="number-pad"
+              returnKeyType="done"
+              placeholder="0"
+              placeholderTextColor={t.textTer}
+              style={[
+                typo.subhead,
+                {
+                  width: 80,
+                  height: 36,
+                  borderRadius: radius.md,
+                  backgroundColor: t.surface2,
+                  color: t.text,
+                  textAlign: 'center',
+                  padding: 0,
+                },
+              ]}
+            />
+            <Text style={[typo.subhead, { color: t.textSec }]}>oz</Text>
+            <Pressable
+              onPress={onSetExact}
+              disabled={!inputValue.trim()}
+              style={({ pressed }) => ({
+                height: 36,
+                paddingHorizontal: space.md,
+                borderRadius: radius.md,
+                backgroundColor: t.primary,
+                alignItems: 'center',
+                justifyContent: 'center',
+                opacity: !inputValue.trim() ? 0.4 : pressed ? 0.85 : 1,
+              })}
+            >
+              <Text style={[typo.subheadEm, { color: t.textOnPrim }]}>
+                Set
+              </Text>
+            </Pressable>
+          </View>
+
+          <Pressable
+            onPress={onReset}
+            style={({ pressed }) => ({
+              marginTop: space.xl,
+              height: 44,
+              borderRadius: radius.md,
+              backgroundColor: t.dangerSoft,
+              alignItems: 'center',
+              justifyContent: 'center',
+              opacity: pressed ? 0.6 : 1,
+            })}
+          >
+            <Text style={[typo.subheadEm, { color: t.danger }]}>
+              Reset to 0
+            </Text>
+          </Pressable>
+        </Pressable>
+      </Pressable>
+    </Modal>
+  );
+}
+
 function Fab({ onPress }: { onPress?: () => void }) {
   const t = useTheme();
+  const insets = useSafeAreaInsets();
   return (
     <Pressable
       onPress={onPress}
       style={({ pressed }) => ({
         position: 'absolute',
         right: 20,
-        bottom: 96,
+        bottom: insets.bottom + 16,
         width: 56,
         height: 56,
         borderRadius: 999,
@@ -265,6 +499,8 @@ export default function Today() {
   const [error, setError] = useState<string | null>(null);
 
   const [feelingDismissed, setFeelingDismissed] = useState(false);
+  const [waterSheetOpen, setWaterSheetOpen] = useState(false);
+  const [waterInput, setWaterInput] = useState('');
   const toast = useToast();
 
   // Throttle re-fetches on tab focus. Tab focus fires often (navigating
@@ -313,6 +549,47 @@ export default function Today() {
     },
     [user, toast],
   );
+
+  const handleSetExactWater = useCallback(async () => {
+    if (!user) return;
+    const oz = Number(waterInput);
+    if (!Number.isFinite(oz) || oz < 0) {
+      toast.show('Enter a valid amount.', 'error');
+      return;
+    }
+    try {
+      await setWaterExact(user.id, oz, new Date());
+      setWaterOz(oz);
+      setWaterInput('');
+      setWaterSheetOpen(false);
+    } catch {
+      toast.show('Could not update water. Try again.', 'error');
+    }
+  }, [user, waterInput, toast]);
+
+  const handleResetWater = useCallback(() => {
+    if (!user) return;
+    Alert.alert(
+      'Reset water?',
+      "This will clear today's water log.",
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Reset',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await resetWaterForDate(user.id, new Date());
+              setWaterOz(0);
+              setWaterSheetOpen(false);
+            } catch {
+              toast.show('Could not reset water. Try again.', 'error');
+            }
+          },
+        },
+      ],
+    );
+  }, [user, toast]);
 
   useFocusEffect(
     useCallback(() => {
@@ -419,7 +696,12 @@ export default function Today() {
           />
         </View>
 
-        <WaterRow oz={waterOz} target={WATER_TARGET_OZ} onAdd={handleAddWater} />
+        <WaterRow
+          oz={waterOz}
+          target={WATER_TARGET_OZ}
+          onAdd={handleAddWater}
+          onOpenSheet={() => setWaterSheetOpen(true)}
+        />
 
         {/* How are you feeling? row — hidden once a feeling is logged today,
             and also hidden for the rest of the session if Skipped. */}
@@ -594,6 +876,18 @@ export default function Today() {
         visible={showCelebration}
         onClose={() => setShowCelebration(false)}
         streakDays={streak}
+      />
+
+      <WaterSheet
+        visible={waterSheetOpen}
+        oz={waterOz}
+        target={WATER_TARGET_OZ}
+        inputValue={waterInput}
+        onChangeInput={setWaterInput}
+        onClose={() => setWaterSheetOpen(false)}
+        onAdd={handleAddWater}
+        onSetExact={handleSetExactWater}
+        onReset={handleResetWater}
       />
 
       <Toast

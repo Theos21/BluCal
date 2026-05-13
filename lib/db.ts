@@ -242,6 +242,36 @@ export const addWaterEntry = async (
   if (error) throw error;
 };
 
+export const resetWaterForDate = async (
+  userId: string,
+  date: Date,
+): Promise<void> => {
+  const start = new Date(date);
+  start.setHours(0, 0, 0, 0);
+  const end = new Date(date);
+  end.setHours(23, 59, 59, 999);
+  const { error } = await supabase
+    .from('water_entries')
+    .delete()
+    .eq('user_id', userId)
+    .gte('logged_at', start.toISOString())
+    .lte('logged_at', end.toISOString());
+  if (error) throw error;
+};
+
+// Replace today's water log with a single entry of `amountOz`. Pass 0 to
+// clear without re-adding.
+export const setWaterExact = async (
+  userId: string,
+  amountOz: number,
+  date: Date,
+): Promise<void> => {
+  await resetWaterForDate(userId, date);
+  if (amountOz > 0) {
+    await addWaterEntry(userId, amountOz);
+  }
+};
+
 // ── Macro targets ────────────────────────────────────────────────────────────
 export const getCurrentMacroTarget = async (
   userId: string,

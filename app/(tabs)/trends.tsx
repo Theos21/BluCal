@@ -22,6 +22,7 @@ import Svg, {
 import { radius, space, type as typo, useTheme, type Theme } from '../../lib/theme';
 import { useAuth } from '../../lib/AuthContext';
 import {
+  calculateMomentumScore,
   getCurrentMacroTarget,
   getFeelingEntriesForDateRange,
   getFoodEntriesForDateRange,
@@ -39,10 +40,6 @@ const CARD_MARGIN_H = space.lg;
 const CARD_PADDING = space.lg;
 
 const DEFAULT_TARGET_SPLIT = { protein: 30, carbs: 45, fat: 25 };
-
-// Placeholder momentum scores — real calculation lands in a future pass.
-const PLACEHOLDER_MOMENTUM = [72, 85, 91, 68, 88, 95, 84];
-const PLACEHOLDER_MOMENTUM_DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 
 const RANGES = ['7D', '30D', '90D', 'All'] as const;
 type Range = (typeof RANGES)[number];
@@ -431,8 +428,18 @@ function MacroDonut({
   );
 }
 
-// ── Momentum bars (placeholder data — wired in a future pass) ───────────────
-function MomentumBars({ width, t }: { width: number; t: Theme }) {
+// ── Momentum bars ────────────────────────────────────────────────────────────
+function MomentumBars({
+  width,
+  t,
+  data,
+  days,
+}: {
+  width: number;
+  t: Theme;
+  data: number[];
+  days: string[];
+}) {
   const labelStripH = 20;
   const H = 100 + labelStripH;
   const padT = 18;
@@ -440,8 +447,6 @@ function MomentumBars({ width, t }: { width: number; t: Theme }) {
   const padL = 24;
   const maxBarH = H - padT - padB - labelStripH;
   const labelY = padT + maxBarH + 14;
-  const data = PLACEHOLDER_MOMENTUM;
-  const days = PLACEHOLDER_MOMENTUM_DAYS;
   const plotW = width - padL;
   const colW = plotW / data.length;
   const barW = Math.max(4, colW * 0.55);
@@ -670,6 +675,7 @@ export default function Trends() {
   const [weightEntries, setWeightEntries] = useState<WeightEntry[]>([]);
   const [feelingEntries, setFeelingEntries] = useState<FeelingEntry[]>([]);
   const [macroTarget, setMacroTarget] = useState<MacroTarget | null>(null);
+  const [momentumScore, setMomentumScore] = useState(0);
   const [loading, setLoading] = useState(true);
 
   const loadTrendsData = async () => {
@@ -689,16 +695,18 @@ export default function Trends() {
             : selectedRange === '90D'
               ? 90
               : 365;
-      const [food, weight, feeling, target] = await Promise.all([
+      const [food, weight, feeling, target, score] = await Promise.all([
         getFoodEntriesForDateRange(user.id, startDate, endDate),
         getWeightEntries(user.id, weightDays),
         getFeelingEntriesForDateRange(user.id, startDate, endDate),
         getCurrentMacroTarget(user.id),
+        calculateMomentumScore(user.id, profile?.goal ?? 'maintain'),
       ]);
       setFoodEntries(food);
       setWeightEntries(weight);
       setFeelingEntries(feeling);
       setMacroTarget(target);
+      setMomentumScore(score);
     } catch (e) {
       console.error(e);
     } finally {
@@ -787,10 +795,31 @@ export default function Trends() {
   const hasFeelingData = feelingEntries.length > 0;
   const DAYS_TO_UNLOCK = Math.max(0, 3 - dailyCalories.length);
 
-  const momentumAvg = Math.round(
-    PLACEHOLDER_MOMENTUM.reduce((a, b) => a + b, 0) /
-      PLACEHOLDER_MOMENTUM.length,
-  );
+  // Per-day momentum approximation for the bars: ratio of logged calories
+  // to target, clamped to 100. The card header displays the real 7-day
+  // composite via calculateMomentumScore.
+  const last7DayKeys = Array.from({ length: 7 }, (_, i) => {
+    const d = new Date();
+    d.setDate(d.getDate() - (6 - i));
+    return d.toLocaleDateString('en-CA');
+  });
+  const last7DayLabels = Array.from({ length: 7 }, (_, i) => {
+    const d = new Date();
+    d.setDate(d.getDate() - (6 - i));
+    return d.toLocaleDateString('en-US', { weekday: 'short' });
+  });
+  const dailyCalLookup: Record<string, number> = {};
+  foodEntries.forEach((e) => {
+    const day = new Date(e.logged_at).toLocaleDateString('en-CA');
+    dailyCalLookup[day] = (dailyCalLookup[day] ?? 0) + e.calories;
+  });
+  const targetCalForMomentum = macroTarget?.calories ?? CAL_TARGET;
+  const momentumData = last7DayKeys.map((day) => {
+    const cal = dailyCalLookup[day] ?? 0;
+    if (cal === 0) return 0;
+    const ratio = Math.min(1, cal / targetCalForMomentum);
+    return Math.round(ratio * 100);
+  });
 
   // Approximate per-period macro grams (only meaningful when we have data)
   const avgP = totalDays === 0 ? 0 : Math.round(totalP / totalDays);
@@ -1127,15 +1156,25 @@ export default function Trends() {
             <Card>
               <CardHeader
                 title="Momentum score"
-                right={`7-day avg: ${momentumAvg}`}
+                right={`7-day avg: ${momentumScore}`}
               />
               {hasEnoughData ? (
-                <MomentumBars width={chartW} t={t} />
+                <MomentumBars
+                  width={chartW}
+                  t={t}
+                  data={momentumData}
+                  days={last7DayLabels}
+                />
               ) : (
                 <LockedChart
                   message={`Log consistently for ${DAYS_TO_UNLOCK} more days to unlock`}
                 >
-                  <MomentumBars width={chartW} t={t} />
+                  <MomentumBars
+                    width={chartW}
+                    t={t}
+                    data={momentumData}
+                    days={last7DayLabels}
+                  />
                 </LockedChart>
               )}
             </Card>

@@ -15,7 +15,7 @@ import Svg, { Circle, G } from 'react-native-svg';
 import { radius, space, type as typo, useTheme } from '../../lib/theme';
 import { signOut } from '../../lib/auth';
 import { useAuth } from '../../lib/AuthContext';
-import { getStreak, updateProfile } from '../../lib/db';
+import { calculateMomentumScore, getStreak, updateProfile } from '../../lib/db';
 import { isAvailable, requestPermissions } from '../../lib/appleHealth';
 import {
   cancelAllNotifications,
@@ -402,6 +402,7 @@ export default function Profile() {
 
   const [isMetric, setIsMetric] = useState(false);
   const [streak, setStreak] = useState(0);
+  const [momentumScore, setMomentumScore] = useState(0);
   const [, setLoading] = useState(true);
   const [logReminder, setLogReminder] = useState(false);
   const [weighInReminder, setWeighInReminder] = useState(false);
@@ -454,8 +455,12 @@ export default function Profile() {
     }
     try {
       setLoading(true);
-      const currentStreak = await getStreak(user.id);
+      const [currentStreak, score] = await Promise.all([
+        getStreak(user.id),
+        calculateMomentumScore(user.id, profile?.goal ?? 'maintain'),
+      ]);
       setStreak(currentStreak);
+      setMomentumScore(score);
     } catch (e) {
       console.error(e);
     } finally {
@@ -549,7 +554,7 @@ export default function Profile() {
         contentContainerStyle={{ paddingBottom: space.xxxl }}
       >
         <ProfileHeader name={displayName} email={email} initials={initials} />
-        <MomentumBanner momentumScore={0} streakDays={streak} />
+        <MomentumBanner momentumScore={momentumScore} streakDays={streak} />
 
         {/* Profile */}
         <SectionLabel label="Profile" />

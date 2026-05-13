@@ -272,6 +272,90 @@ export const setWaterExact = async (
   }
 };
 
+// Momentum score (0-100) from three equally-weighted 7-day components:
+//   1. Logging consistency (0-33): days where >=80% of cal target was logged
+//   2. Macro adherence    (0-33): average daily closeness to P/C/F targets
+//   3. Weight trend       (0-34): is direction-of-change aligned with goal?
+// Returns 0 if no food has been logged in the last 7 days.
+export const calculateMomentumScore = async (
+  userId: string,
+  goal: string = 'maintain',
+): Promise<number> => {
+  const sevenDaysAgo = new Date();
+  sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+
+  const [foodEntries, weightEntries, macroTarget] = await Promise.all([
+    getFoodEntriesForDateRange(userId, sevenDaysAgo, new Date()),
+    getWeightEntries(userId, 14),
+    getCurrentMacroTarget(userId),
+  ]);
+
+  const targetCal = macroTarget?.calories ?? 2000;
+  const targetP = macroTarget?.protein_g ?? 160;
+  const targetC = macroTarget?.carbs_g ?? 220;
+  const targetF = macroTarget?.fat_g ?? 65;
+
+  const dailyCalMap: Record<string, number> = {};
+  foodEntries.forEach((e) => {
+    const day = new Date(e.logged_at).toLocaleDateString('en-CA');
+    dailyCalMap[day] = (dailyCalMap[day] ?? 0) + e.calories;
+  });
+  const last7Days = Array.from({ length: 7 }, (_, i) => {
+    const d = new Date();
+    d.setDate(d.getDate() - i);
+    return d.toLocaleDateString('en-CA');
+  });
+  const daysWithLogging = last7Days.filter(
+    (d) => (dailyCalMap[d] ?? 0) >= targetCal * 0.8,
+  ).length;
+  const consistencyScore = Math.round((daysWithLogging / 7) * 33);
+
+  const loggingDays = Object.keys(dailyCalMap).length;
+  if (loggingDays === 0) return 0;
+
+  const dailyMacroMap: Record<string, { p: number; c: number; f: number }> = {};
+  foodEntries.forEach((e) => {
+    const day = new Date(e.logged_at).toLocaleDateString('en-CA');
+    if (!dailyMacroMap[day]) dailyMacroMap[day] = { p: 0, c: 0, f: 0 };
+    dailyMacroMap[day].p += Number(e.protein_g);
+    dailyMacroMap[day].c += Number(e.carbs_g);
+    dailyMacroMap[day].f += Number(e.fat_g);
+  });
+  const macroScores = Object.values(dailyMacroMap).map((day) => {
+    const pScore =
+      targetP > 0 ? Math.max(0, 1 - Math.abs(day.p - targetP) / targetP) : 0;
+    const cScore =
+      targetC > 0 ? Math.max(0, 1 - Math.abs(day.c - targetC) / targetC) : 0;
+    const fScore =
+      targetF > 0 ? Math.max(0, 1 - Math.abs(day.f - targetF) / targetF) : 0;
+    return (pScore + cScore + fScore) / 3;
+  });
+  const avgMacroScore =
+    macroScores.reduce((s, v) => s + v, 0) / macroScores.length;
+  const adherenceScore = Math.round(avgMacroScore * 33);
+
+  let alignmentScore = 17;
+  if (weightEntries.length >= 4) {
+    const half = Math.floor(weightEntries.length / 2);
+    const recent = weightEntries.slice(0, half);
+    const older = weightEntries.slice(half);
+    const recentAvg =
+      recent.reduce((s, e) => s + Number(e.weight_kg), 0) / recent.length;
+    const olderAvg =
+      older.reduce((s, e) => s + Number(e.weight_kg), 0) / older.length;
+    const trend = recentAvg - olderAvg;
+
+    if (goal === 'lose_fat' && trend < 0) alignmentScore = 34;
+    else if (goal === 'lose_fat' && trend > 0.5) alignmentScore = 0;
+    else if (goal === 'build_muscle' && trend > 0) alignmentScore = 34;
+    else if (goal === 'maintain' && Math.abs(trend) < 0.3)
+      alignmentScore = 34;
+    else alignmentScore = 17;
+  }
+
+  return Math.min(100, consistencyScore + adherenceScore + alignmentScore);
+};
+
 // ── Macro targets ────────────────────────────────────────────────────────────
 export const getCurrentMacroTarget = async (
   userId: string,

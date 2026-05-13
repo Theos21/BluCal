@@ -28,6 +28,7 @@ import { useToast } from '../../lib/useToast';
 import { useAuth } from '../../lib/AuthContext';
 import {
   addWaterEntry,
+  calculateMomentumScore,
   getCurrentMacroTarget,
   getFeelingEntriesForDate,
   getFoodEntriesForDate,
@@ -45,10 +46,12 @@ function Header({
   initials,
   dateLabel,
   streak,
+  momentum,
 }: {
   initials: string;
   dateLabel: string;
   streak: number;
+  momentum: number;
 }) {
   const t = useTheme();
   return (
@@ -67,6 +70,25 @@ function Header({
           {dateLabel}
         </Text>
       </View>
+      {momentum >= 70 && (
+        <View
+          style={{
+            flexDirection: 'row',
+            alignItems: 'center',
+            gap: 4,
+            paddingHorizontal: space.sm,
+            paddingVertical: 2,
+            borderRadius: radius.pill,
+            backgroundColor: t.successSoft,
+            marginRight: space.sm,
+          }}
+        >
+          <Text style={[typo.caption1, { color: t.success, fontWeight: '600' }]}>
+            {momentum}
+          </Text>
+          <Text style={[typo.caption2, { color: t.success }]}>momentum</Text>
+        </View>
+      )}
       {streak >= 2 && (
         <View
           style={{
@@ -493,6 +515,7 @@ export default function Today() {
   const [entries, setEntries] = useState<FoodEntry[]>([]);
   const [macroTarget, setMacroTarget] = useState<MacroTarget | null>(null);
   const [streak, setStreak] = useState(0);
+  const [momentum, setMomentum] = useState(0);
   const [waterOz, setWaterOz] = useState(0);
   const [hasFeelingToday, setHasFeelingToday] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -516,26 +539,28 @@ export default function Today() {
     try {
       setLoading(true);
       setError(null);
-      const [todayEntries, target, currentStreak, water, feelings] =
+      const [todayEntries, target, currentStreak, water, feelings, score] =
         await Promise.all([
           getFoodEntriesForDate(user.id, new Date()),
           getCurrentMacroTarget(user.id),
           getStreak(user.id),
           getWaterForDate(user.id, new Date()),
           getFeelingEntriesForDate(user.id, new Date()),
+          calculateMomentumScore(user.id, profile?.goal ?? 'maintain'),
         ]);
       setEntries(todayEntries);
       setMacroTarget(target);
       setStreak(currentStreak);
       setWaterOz(water);
       setHasFeelingToday(feelings.length > 0);
+      setMomentum(score);
       lastLoadTime.current = Date.now();
     } catch {
       setError('Could not load your food log. Pull down to retry.');
     } finally {
       setLoading(false);
     }
-  }, [user]);
+  }, [user, profile?.goal]);
 
   const handleAddWater = useCallback(
     async (oz: number) => {
@@ -684,7 +709,12 @@ export default function Today() {
           />
         }
       >
-        <Header initials={initials} dateLabel={dateLabel} streak={streak} />
+        <Header
+          initials={initials}
+          dateLabel={dateLabel}
+          streak={streak}
+          momentum={momentum}
+        />
 
         <View style={{ paddingHorizontal: space.lg, paddingTop: space.md }}>
           <MacroSummaryCard

@@ -17,6 +17,7 @@ import { useFocusEffect } from 'expo-router';
 import { radius, space, type as typo, useTheme } from '../../lib/theme';
 import { useAuth } from '../../lib/AuthContext';
 import {
+  calculateMomentumScore,
   getCurrentMacroTarget,
   getFoodEntriesForDateRange,
   getStreak,
@@ -502,6 +503,7 @@ export default function Coach() {
   const [weightEntries, setWeightEntries] = useState<WeightEntry[]>([]);
   const [weeklyAvgCal, setWeeklyAvgCal] = useState(0);
   const [streak, setStreak] = useState(0);
+  const [momentum, setMomentum] = useState(0);
   const [loading, setLoading] = useState(true);
 
   const loadCoachData = async () => {
@@ -514,17 +516,20 @@ export default function Coach() {
       const sevenDaysAgo = new Date();
       sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
 
-      const [target, weights, currentStreak, weekFood] = await Promise.all([
-        getCurrentMacroTarget(user.id),
-        getWeightEntries(user.id, 14),
-        getStreak(user.id),
-        getFoodEntriesForDateRange(user.id, sevenDaysAgo, new Date()),
-      ]);
+      const [target, weights, currentStreak, weekFood, score] =
+        await Promise.all([
+          getCurrentMacroTarget(user.id),
+          getWeightEntries(user.id, 14),
+          getStreak(user.id),
+          getFoodEntriesForDateRange(user.id, sevenDaysAgo, new Date()),
+          calculateMomentumScore(user.id, profile?.goal ?? 'maintain'),
+        ]);
 
       setMacroTarget(target);
       const weightsDesc = weights.slice().reverse();
       setWeightEntries(weightsDesc);
       setStreak(currentStreak);
+      setMomentum(score);
 
       const totalCal = weekFood.reduce((s, e) => s + e.calories, 0);
       const uniqueDays = new Set(
@@ -615,9 +620,6 @@ export default function Coach() {
   };
 
   const goalPacing = getGoalPacing();
-
-  // TODO: derive a real momentum score from logging consistency + macro hits.
-  const momentum = 0;
 
   const hasInsightData = weeklyAvgCal > 0 || weightEntries.length > 0;
   const daysLogged = Math.min(streak, INSIGHT_DAYS_NEEDED);

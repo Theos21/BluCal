@@ -19,10 +19,15 @@ import { radius, space, type as typo, useTheme } from '../lib/theme';
 import Toast from '../components/Toast';
 import { useToast } from '../lib/useToast';
 import { useAuth } from '../lib/AuthContext';
-import { addFoodEntry, getRecentFoods, getRecipes } from '../lib/db';
+import {
+  addFoodEntry,
+  getRecentFoods,
+  getRecipesWithMacros,
+  type RecipeWithMacros,
+} from '../lib/db';
 import { searchFoods, type FoodSearchResult } from '../lib/foodSearch';
 import { sessionState } from '../lib/sessionState';
-import type { FoodEntry, Recipe } from '../lib/types';
+import type { FoodEntry } from '../lib/types';
 
 type FoodRow = {
   id: string;
@@ -421,7 +426,7 @@ export default function LogFood() {
   const { user } = useAuth();
 
   const [recentFoods, setRecentFoods] = useState<FoodEntry[]>([]);
-  const [myRecipes, setMyRecipes] = useState<Recipe[]>([]);
+  const [myRecipes, setMyRecipes] = useState<RecipeWithMacros[]>([]);
   const [loading, setLoading] = useState(true);
 
   const [searchQuery, setSearchQuery] = useState('');
@@ -490,7 +495,7 @@ export default function LogFood() {
       setLoading(false);
       return;
     }
-    Promise.all([getRecentFoods(user.id), getRecipes(user.id)])
+    Promise.all([getRecentFoods(user.id), getRecipesWithMacros(user.id)])
       .then(([recent, recipes]) => {
         setRecentFoods(recent);
         setMyRecipes(recipes);
@@ -595,11 +600,42 @@ export default function LogFood() {
     onAdd: () => void handleReLog(entry),
   }));
 
+  const handleLogRecipe = async (recipe: RecipeWithMacros) => {
+    if (!user) return;
+    try {
+      await addFoodEntry({
+        user_id: user.id,
+        logged_at: new Date().toISOString(),
+        name: recipe.name,
+        portion_description: `1 serving (${recipe.servings} servings total)`,
+        quantity: 1,
+        unit: 'serving',
+        calories: recipe.perServing.calories,
+        protein_g: recipe.perServing.protein_g,
+        carbs_g: recipe.perServing.carbs_g,
+        fat_g: recipe.perServing.fat_g,
+        fiber_g: 0,
+        sugar_g: 0,
+        sodium_mg: 0,
+        saturated_fat_g: 0,
+        cholesterol_mg: 0,
+        food_database_id: null,
+        barcode: null,
+        source: 'recipe',
+      });
+      sessionState.setJustLoggedFood(recipe.name);
+      toast.show(`Added: ${recipe.name}`, 'success');
+      setTimeout(() => router.back(), 800);
+    } catch {
+      toast.show('Could not add recipe. Try again.', 'error');
+    }
+  };
+
   const recipeRows: FoodRow[] = myRecipes.map((recipe) => ({
     id: recipe.id,
     name: recipe.name,
-    detail: `${recipe.servings} serving${recipe.servings !== 1 ? 's' : ''}`,
-    onAdd: () => toast.show('Coming soon', 'info'),
+    detail: `${recipe.perServing.calories} kcal · ${recipe.perServing.protein_g}p · ${recipe.perServing.carbs_g}c · ${recipe.perServing.fat_g}f per serving`,
+    onAdd: () => void handleLogRecipe(recipe),
   }));
 
   const isSearching = searchQuery.trim().length > 0;

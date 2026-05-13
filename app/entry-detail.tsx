@@ -125,15 +125,6 @@ function NutritionRow({
   );
 }
 
-// TODO: replace with real data from Supabase
-const NUTRITION_DETAILS = [
-  { label: 'Fiber', value: '4g' },
-  { label: 'Sugar', value: '12g' },
-  { label: 'Sodium', value: '140mg' },
-  { label: 'Saturated fat', value: '1g' },
-  { label: 'Cholesterol', value: '0mg' },
-];
-
 export default function EntryDetail() {
   const t = useTheme();
   const insets = useSafeAreaInsets();
@@ -145,6 +136,11 @@ export default function EntryDetail() {
     protein_g?: string;
     carbs_g?: string;
     fat_g?: string;
+    fiber_g?: string;
+    sugar_g?: string;
+    sodium_mg?: string;
+    saturated_fat_g?: string;
+    cholesterol_mg?: string;
     logged_at?: string;
   }>();
 
@@ -154,9 +150,22 @@ export default function EntryDetail() {
   const protein = Number(params.protein_g ?? '0');
   const carbs = Number(params.carbs_g ?? '0');
   const fat = Number(params.fat_g ?? '0');
+  const fiber = Number(params.fiber_g ?? '0');
+  const sugar = Number(params.sugar_g ?? '0');
+  const sodium = Number(params.sodium_mg ?? '0');
+  const saturatedFat = Number(params.saturated_fat_g ?? '0');
+  const cholesterol = Number(params.cholesterol_mg ?? '0');
   const loggedAt = params.logged_at
     ? formatDisplayTime(parseLoggedAt(params.logged_at))
     : '';
+
+  const nutritionDetails = [
+    { label: 'Fiber', value: `${Math.round(fiber)}g` },
+    { label: 'Sugar', value: `${Math.round(sugar)}g` },
+    { label: 'Sodium', value: `${Math.round(sodium)}mg` },
+    { label: 'Saturated fat', value: `${Math.round(saturatedFat)}g` },
+    { label: 'Cholesterol', value: `${Math.round(cholesterol)}mg` },
+  ];
 
   const [quantityText, setQuantityText] = useState('1');
   const [unitIndex, setUnitIndex] = useState(0);
@@ -379,12 +388,12 @@ export default function EntryDetail() {
             {nutritionOpen && (
               <View>
                 <View style={{ height: 0.5, backgroundColor: t.hairline }} />
-                {NUTRITION_DETAILS.map((row, i) => (
+                {nutritionDetails.map((row, i) => (
                   <NutritionRow
                     key={row.label}
                     label={row.label}
                     value={row.value}
-                    isLast={i === NUTRITION_DETAILS.length - 1}
+                    isLast={i === nutritionDetails.length - 1}
                     t={t}
                   />
                 ))}

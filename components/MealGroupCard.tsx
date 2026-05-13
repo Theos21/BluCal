@@ -86,6 +86,11 @@ export default function MealGroupCard({ group }: Props) {
                     protein_g: String(item.protein_g),
                     carbs_g: String(item.carbs_g),
                     fat_g: String(item.fat_g),
+                    fiber_g: String(item.fiber_g ?? 0),
+                    sugar_g: String(item.sugar_g ?? 0),
+                    sodium_mg: String(item.sodium_mg ?? 0),
+                    saturated_fat_g: String(item.saturated_fat_g ?? 0),
+                    cholesterol_mg: String(item.cholesterol_mg ?? 0),
                     logged_at: item.logged_at,
                   },
                 })

@@ -14,7 +14,7 @@
       "backgroundColor": "#F4F4F6"
     },
     "ios": {
-      "buildNumber": "3",
+      "buildNumber": "4",
       "supportsTablet": false,
       "bundleIdentifier": "com.blucal.app",
       "infoPlist": {

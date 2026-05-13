@@ -781,8 +781,8 @@ export default function Meals() {
           </Pressable>
         )}
 
-        {/* Day templates */}
-        <SectionLabel label="Day templates" />
+        {/* TODO: Day templates — hide until real template saving is built */}
+        {/* <SectionLabel label="Day templates" />
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
@@ -814,7 +814,7 @@ export default function Meals() {
               </Text>
             </Pressable>
           ))}
-        </ScrollView>
+        </ScrollView> */}
 
         {/* Generate shopping list */}
         <Pressable

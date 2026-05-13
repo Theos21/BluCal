@@ -713,8 +713,8 @@ export default function Profile() {
           />
         </Section>
 
-        {/* Accountability */}
-        <SectionLabel label="Accountability" />
+        {/* TODO: Accountability partner — re-enable when real invite system is built */}
+        {/* <SectionLabel label="Accountability" />
         <Section>
           <SettingsRow
             label="Accountability partner"
@@ -722,7 +722,7 @@ export default function Profile() {
             onPress={() => router.push('/partner')}
             isLast
           />
-        </Section>
+        </Section> */}
 
         {/* Data */}
         <SectionLabel label="Data" />

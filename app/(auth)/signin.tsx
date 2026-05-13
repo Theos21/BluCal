@@ -15,6 +15,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { radius, space, type as typo, useTheme, type Theme } from '../../lib/theme';
 import { signIn } from '../../lib/auth';
+import { supabase } from '../../lib/supabase';
 
 function Field({
   label,
@@ -119,8 +120,31 @@ export default function SignIn() {
     }
   };
 
-  const handleForgotPassword = () => {
-    Alert.alert('Coming soon', 'Password reset will be available soon.');
+  const handleForgotPassword = async () => {
+    const trimmed = email.trim();
+    if (!trimmed) {
+      Alert.alert(
+        'Email required',
+        'Enter your email address above, then tap Forgot password again.',
+      );
+      return;
+    }
+    try {
+      const { error } = await supabase.auth.resetPasswordForEmail(trimmed, {
+        redirectTo: 'blucal://reset-password',
+      });
+      if (error) throw error;
+      Alert.alert(
+        'Check your email',
+        `If an account exists for ${trimmed}, a password reset link is on its way.`,
+      );
+    } catch (e) {
+      console.error(e);
+      Alert.alert(
+        'Could not send reset email',
+        'Please check your connection and try again.',
+      );
+    }
   };
 
   return (

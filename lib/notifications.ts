@@ -17,7 +17,6 @@ export const registerForPushNotifications = async (
   userId: string,
 ): Promise<string | null> => {
   if (!Device.isDevice) {
-    console.log('Push notifications require a physical device');
     return null;
   }
 
@@ -37,7 +36,6 @@ export const registerForPushNotifications = async (
   }
 
   if (finalStatus !== 'granted') {
-    console.log('Push notification permission denied');
     return null;
   }
 

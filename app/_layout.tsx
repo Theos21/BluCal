@@ -137,6 +137,14 @@ function RootNavigator() {
           name="body-measurements"
           options={{ presentation: 'modal', headerShown: false }}
         />
+        <Stack.Screen
+          name="edit-profile"
+          options={{ presentation: 'modal', headerShown: false }}
+        />
+        <Stack.Screen
+          name="edit-goals"
+          options={{ presentation: 'modal', headerShown: false }}
+        />
       </Stack>
     </>
   );

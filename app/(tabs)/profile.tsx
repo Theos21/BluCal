@@ -283,6 +283,7 @@ function ProfileHeader({
         {email}
       </Text>
       <Pressable
+        onPress={() => router.push('/edit-profile')}
         style={({ pressed }) => ({
           marginTop: space.md,
           backgroundColor: t.surface2,
@@ -553,18 +554,25 @@ export default function Profile() {
         {/* Profile */}
         <SectionLabel label="Profile" />
         <Section>
-          <SettingsRow label="Name" value={profile?.name ?? 'Not set'} />
+          <SettingsRow
+            label="Name"
+            value={profile?.name ?? 'Not set'}
+            onPress={() => router.push('/edit-profile')}
+          />
           <SettingsRow
             label="Birthday"
             value={profile?.birthday ?? 'Not set'}
+            onPress={() => router.push('/edit-profile')}
           />
           <SettingsRow
             label="Biological sex"
             value={profile?.biological_sex ?? 'Not set'}
+            onPress={() => router.push('/edit-profile')}
           />
           <SettingsRow
             label="Height"
             value={formatHeight(profile?.height_cm, isMetric)}
+            onPress={() => router.push('/edit-profile')}
           />
           <SettingsRow
             label="Units"
@@ -581,14 +589,17 @@ export default function Profile() {
           <SettingsRow
             label="Current goal"
             value={profile?.goal ? GOAL_LABELS[profile.goal] : 'Not set'}
+            onPress={() => router.push('/edit-goals')}
           />
           <SettingsRow
             label="Goal weight"
             value={formatGoalWeight(profile?.goal_weight_kg, isMetric)}
+            onPress={() => router.push('/edit-goals')}
           />
           <SettingsRow
             label="Weekly pace"
             value={profile?.pace ? PACE_LABELS[profile.pace] : 'Not set'}
+            onPress={() => router.push('/edit-goals')}
           />
           <SettingsRow
             icon="body-outline"

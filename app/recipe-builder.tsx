@@ -1,0 +1,762 @@
+import { useState } from 'react';
+import {
+  ActivityIndicator,
+  Alert,
+  KeyboardAvoidingView,
+  Modal,
+  Platform,
+  Pressable,
+  ScrollView,
+  Text,
+  TextInput,
+  View,
+} from 'react-native';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { Ionicons } from '@expo/vector-icons';
+import { router } from 'expo-router';
+import { radius, space, type as typo, useTheme, type Theme } from '../lib/theme';
+import Toast from '../components/Toast';
+import { useToast } from '../lib/useToast';
+import { useAuth } from '../lib/AuthContext';
+import { addRecipe } from '../lib/db';
+
+const YIELD_UNITS = ['g', 'oz', 'ml', 'cups', 'pieces'] as const;
+
+type Ingredient = {
+  id: string;
+  name: string;
+  quantity: number;
+  unit: string;
+  cal: number;
+  p: number;
+  c: number;
+  f: number;
+};
+
+// ── Small helpers ────────────────────────────────────────────────────────────
+function SectionLabel({ children }: { children: string }) {
+  const t = useTheme();
+  return (
+    <Text
+      style={[
+        typo.caption2,
+        {
+          color: t.textTer,
+          letterSpacing: 0.06,
+          textTransform: 'uppercase',
+          fontWeight: '700',
+          paddingHorizontal: space.lg,
+          paddingTop: space.xl,
+          paddingBottom: space.xs,
+        },
+      ]}
+    >
+      {children}
+    </Text>
+  );
+}
+
+function SectionCard({ children }: { children: React.ReactNode }) {
+  const t = useTheme();
+  return (
+    <View
+      style={{
+        backgroundColor: t.surface,
+        borderRadius: radius.lg,
+        borderWidth: 1,
+        borderColor: t.hairline,
+        overflow: 'hidden',
+        marginHorizontal: space.lg,
+      }}
+    >
+      {children}
+    </View>
+  );
+}
+
+function Separator({ t, inset = 0 }: { t: Theme; inset?: number }) {
+  return (
+    <View
+      style={{
+        height: 0.5,
+        backgroundColor: t.hairline,
+        marginLeft: inset,
+      }}
+    />
+  );
+}
+
+function StepperButton({
+  icon,
+  onPress,
+  disabled,
+}: {
+  icon: 'remove' | 'add';
+  onPress: () => void;
+  disabled?: boolean;
+}) {
+  const t = useTheme();
+  return (
+    <Pressable
+      onPress={onPress}
+      disabled={disabled}
+      style={({ pressed }) => ({
+        width: 32,
+        height: 32,
+        borderRadius: 16,
+        backgroundColor: t.surface2,
+        alignItems: 'center',
+        justifyContent: 'center',
+        opacity: disabled ? 0.4 : pressed ? 0.6 : 1,
+      })}
+    >
+      <Ionicons name={icon} size={18} color={t.textSec} />
+    </Pressable>
+  );
+}
+
+function MacroTile({
+  label,
+  value,
+  bg,
+  valueColor,
+  labelColor,
+  t,
+}: {
+  label: string;
+  value: string;
+  bg: string;
+  valueColor: string;
+  labelColor: string;
+  t: Theme;
+}) {
+  return (
+    <View
+      style={{
+        flex: 1,
+        backgroundColor: bg,
+        borderRadius: radius.md,
+        padding: space.md,
+      }}
+    >
+      <Text
+        style={[
+          typo.caption2,
+          {
+            color: labelColor,
+            letterSpacing: 0.06,
+            textTransform: 'uppercase',
+            fontWeight: '700',
+          },
+        ]}
+      >
+        {label}
+      </Text>
+      <Text
+        style={[
+          typo.title2,
+          {
+            color: valueColor,
+            marginTop: space.xs,
+            fontVariant: ['tabular-nums'],
+          },
+        ]}
+      >
+        {value}
+      </Text>
+    </View>
+  );
+}
+
+// ── Screen ───────────────────────────────────────────────────────────────────
+export default function RecipeBuilder() {
+  const t = useTheme();
+  const insets = useSafeAreaInsets();
+  const toast = useToast();
+  const { user } = useAuth();
+
+  const [recipeName, setRecipeName] = useState('');
+  const [servings, setServings] = useState(1);
+  const [yieldAmount, setYieldAmount] = useState('');
+  const [yieldUnitIdx, setYieldUnitIdx] = useState(0);
+  const [ingredients, setIngredients] = useState<Ingredient[]>([]);
+  const [saving, setSaving] = useState(false);
+
+  const [importOpen, setImportOpen] = useState(false);
+  const [importUrl, setImportUrl] = useState('');
+
+  const totals = ingredients.reduce(
+    (acc, i) => ({
+      cal: acc.cal + i.cal,
+      p: acc.p + i.p,
+      c: acc.c + i.c,
+      f: acc.f + i.f,
+    }),
+    { cal: 0, p: 0, c: 0, f: 0 },
+  );
+  const perServing = {
+    cal: Math.round(totals.cal / servings),
+    p: Math.round(totals.p / servings),
+    c: Math.round(totals.c / servings),
+    f: Math.round(totals.f / servings),
+  };
+
+  const canSave = recipeName.trim().length > 0 && ingredients.length > 0;
+
+  const handleSave = async () => {
+    if (!canSave || !user || saving) return;
+    setSaving(true);
+    try {
+      const totalYield = yieldAmount;
+      const yieldUnit = YIELD_UNITS[yieldUnitIdx];
+      await addRecipe(
+        {
+          user_id: user.id,
+          name: recipeName.trim(),
+          servings,
+          total_yield: totalYield ? Number(totalYield) : null,
+          yield_unit: yieldUnit || null,
+        },
+        ingredients.map((ing, i) => ({
+          recipe_id: '',
+          name: ing.name,
+          quantity: ing.quantity,
+          unit: ing.unit,
+          calories: ing.cal,
+          protein_g: ing.p,
+          carbs_g: ing.c,
+          fat_g: ing.f,
+          custom_food_id: null,
+          food_database_id: null,
+          sort_order: i,
+        })),
+      );
+      toast.show('Recipe saved to your library', 'success');
+      setTimeout(() => router.back(), 800);
+    } catch {
+      toast.show('Could not save recipe. Try again.', 'error');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleImport = () => {
+    toast.show('Recipe import coming soon', 'info');
+    setImportOpen(false);
+    setImportUrl('');
+  };
+
+  const removeIngredient = (id: string) => {
+    setIngredients((prev) => prev.filter((i) => i.id !== id));
+  };
+
+  const confirmRemoveIngredient = (ingredient: Ingredient) => {
+    Alert.alert(
+      'Remove ingredient?',
+      `Remove ${ingredient.name} from this recipe?`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Remove',
+          style: 'destructive',
+          onPress: () => removeIngredient(ingredient.id),
+        },
+      ],
+    );
+  };
+
+  return (
+    <SafeAreaView
+      style={{ flex: 1, backgroundColor: t.bg }}
+      edges={['top', 'left', 'right']}
+    >
+      <KeyboardAvoidingView
+        style={{ flex: 1 }}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      >
+        {/* Header */}
+        <View>
+          <View style={{ alignItems: 'center' }}>
+            <View
+              style={{
+                width: 36,
+                height: 4,
+                borderRadius: radius.pill,
+                backgroundColor: t.surface3,
+                marginTop: 8,
+              }}
+            />
+          </View>
+          <View
+            style={{
+              marginTop: 12,
+              paddingHorizontal: space.lg,
+              flexDirection: 'row',
+              alignItems: 'center',
+              minHeight: 32,
+            }}
+          >
+            <Pressable
+              hitSlop={6}
+              onPress={() => setImportOpen(true)}
+              style={({ pressed }) => ({ opacity: pressed ? 0.6 : 1 })}
+            >
+              <Text style={[typo.footnote, { color: t.primary }]}>
+                Import URL
+              </Text>
+            </Pressable>
+            <Text
+              style={[
+                typo.title3,
+                {
+                  color: t.text,
+                  flex: 1,
+                  textAlign: 'center',
+                },
+              ]}
+            >
+              New recipe
+            </Text>
+            <Pressable
+              onPress={() => router.back()}
+              hitSlop={6}
+              style={({ pressed }) => ({
+                width: 32,
+                height: 32,
+                borderRadius: 16,
+                backgroundColor: t.surface2,
+                alignItems: 'center',
+                justifyContent: 'center',
+                opacity: pressed ? 0.6 : 1,
+              })}
+            >
+              <Ionicons name="close-outline" size={18} color={t.textSec} />
+            </Pressable>
+          </View>
+        </View>
+
+        <ScrollView
+          style={{ flex: 1 }}
+          contentContainerStyle={{ paddingBottom: space.xl }}
+          showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
+        >
+          {/* Section 1 — Recipe details */}
+          <View style={{ marginTop: space.lg }} />
+          <SectionCard>
+            {/* Recipe name */}
+            <View
+              style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                paddingHorizontal: space.lg,
+                paddingVertical: 12,
+                gap: space.md,
+              }}
+            >
+              <Text style={[typo.subhead, { color: t.textSec }]}>
+                Recipe name
+              </Text>
+              <TextInput
+                value={recipeName}
+                onChangeText={setRecipeName}
+                placeholder="e.g. Chicken fried rice"
+                placeholderTextColor={t.textTer}
+                autoCapitalize="words"
+                returnKeyType="done"
+                style={[
+                  typo.body,
+                  {
+                    flex: 1,
+                    color: t.text,
+                    textAlign: 'right',
+                    padding: 0,
+                  },
+                ]}
+              />
+            </View>
+            <Separator t={t} inset={space.lg} />
+
+            {/* Servings stepper */}
+            <View
+              style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                paddingHorizontal: space.lg,
+                paddingVertical: 12,
+                gap: space.md,
+              }}
+            >
+              <Text style={[typo.subhead, { color: t.textSec, flex: 1 }]}>
+                Servings
+              </Text>
+              <StepperButton
+                icon="remove"
+                onPress={() =>
+                  setServings((s) => Math.max(1, s - 1))
+                }
+                disabled={servings <= 1}
+              />
+              <Text
+                style={[
+                  typo.headline,
+                  {
+                    color: t.text,
+                    minWidth: 28,
+                    textAlign: 'center',
+                    fontVariant: ['tabular-nums'],
+                  },
+                ]}
+              >
+                {servings}
+              </Text>
+              <StepperButton
+                icon="add"
+                onPress={() => setServings((s) => Math.min(50, s + 1))}
+                disabled={servings >= 50}
+              />
+            </View>
+            <Separator t={t} inset={space.lg} />
+
+            {/* Total yield */}
+            <View
+              style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                paddingHorizontal: space.lg,
+                paddingVertical: 12,
+                gap: space.sm,
+              }}
+            >
+              <Text style={[typo.subhead, { color: t.textSec, flex: 1 }]}>
+                Total yield
+              </Text>
+              <TextInput
+                value={yieldAmount}
+                onChangeText={setYieldAmount}
+                keyboardType="decimal-pad"
+                returnKeyType="done"
+                placeholder="0"
+                placeholderTextColor={t.textTer}
+                style={{
+                  width: 60,
+                  backgroundColor: t.surface2,
+                  borderRadius: radius.sm,
+                  paddingHorizontal: 8,
+                  paddingVertical: 8,
+                  ...typo.subhead,
+                  color: t.text,
+                  textAlign: 'center',
+                }}
+              />
+              <Pressable
+                onPress={() =>
+                  setYieldUnitIdx((i) => (i + 1) % YIELD_UNITS.length)
+                }
+                style={({ pressed }) => ({
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  gap: 4,
+                  backgroundColor: t.surface2,
+                  borderRadius: radius.sm,
+                  paddingHorizontal: 10,
+                  paddingVertical: 8,
+                  opacity: pressed ? 0.6 : 1,
+                })}
+              >
+                <Text style={[typo.subhead, { color: t.text }]}>
+                  {YIELD_UNITS[yieldUnitIdx]}
+                </Text>
+                <Ionicons
+                  name="chevron-down"
+                  size={14}
+                  color={t.textSec}
+                />
+              </Pressable>
+            </View>
+          </SectionCard>
+
+          {/* Section 2 — Ingredients */}
+          <SectionLabel>Ingredients</SectionLabel>
+          {ingredients.length === 0 ? (
+            <View
+              style={{
+                alignItems: 'center',
+                paddingVertical: space.xxxl,
+                gap: space.sm,
+              }}
+            >
+              <Ionicons name="flask-outline" size={48} color={t.textTer} />
+              <Text style={[typo.subhead, { color: t.textTer }]}>
+                No ingredients added
+              </Text>
+            </View>
+          ) : (
+            <SectionCard>
+              {ingredients.map((ing, i) => {
+                const isLast = i === ingredients.length - 1;
+                return (
+                  <View key={ing.id}>
+                    <View
+                      style={{
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        paddingHorizontal: space.lg,
+                        paddingVertical: 12,
+                        gap: space.md,
+                      }}
+                    >
+                      <View style={{ flex: 1, minWidth: 0 }}>
+                        <Text
+                          style={[typo.subheadEm, { color: t.text }]}
+                          numberOfLines={1}
+                        >
+                          {ing.name}
+                        </Text>
+                        <Text
+                          style={[
+                            typo.caption1,
+                            { color: t.textSec, marginTop: 2 },
+                          ]}
+                        >
+                          {`${ing.quantity} ${ing.unit}`}
+                        </Text>
+                      </View>
+                      <Text
+                        style={[
+                          typo.footnote,
+                          {
+                            color: t.textSec,
+                            fontVariant: ['tabular-nums'],
+                          },
+                        ]}
+                      >
+                        {`${ing.cal} kcal`}
+                      </Text>
+                      <Pressable
+                        hitSlop={6}
+                        onPress={() => confirmRemoveIngredient(ing)}
+                        style={({ pressed }) => ({
+                          opacity: pressed ? 0.6 : 1,
+                        })}
+                      >
+                        <Ionicons
+                          name="trash-outline"
+                          size={18}
+                          color={t.danger}
+                        />
+                      </Pressable>
+                    </View>
+                    {!isLast && <Separator t={t} inset={space.lg} />}
+                  </View>
+                );
+              })}
+            </SectionCard>
+          )}
+
+          {/* Add ingredient dashed row */}
+          <Pressable
+            onPress={() => router.push('/log-food')}
+            style={({ pressed }) => ({
+              marginHorizontal: space.lg,
+              marginTop: space.md,
+              borderRadius: radius.lg,
+              borderWidth: 1.5,
+              borderColor: `${t.primary}66`,
+              borderStyle: 'dashed',
+              padding: space.md,
+              flexDirection: 'row',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: space.sm,
+              opacity: pressed ? 0.6 : 1,
+            })}
+          >
+            <Ionicons name="add-outline" size={20} color={t.primary} />
+            <Text style={[typo.subhead, { color: t.primary }]}>
+              Add ingredient
+            </Text>
+          </Pressable>
+
+          {/* Section 3 — Per serving */}
+          <SectionLabel>Per serving</SectionLabel>
+          <View
+            style={{
+              marginHorizontal: space.lg,
+              gap: space.sm,
+            }}
+          >
+            <View style={{ flexDirection: 'row', gap: space.sm }}>
+              <MacroTile
+                label="Calories"
+                value={String(perServing.cal)}
+                bg={t.surface2}
+                valueColor={t.text}
+                labelColor={t.textTer}
+                t={t}
+              />
+              <MacroTile
+                label="Protein"
+                value={`${perServing.p}g`}
+                bg={t.primarySoft}
+                valueColor={t.protein}
+                labelColor={t.protein}
+                t={t}
+              />
+            </View>
+            <View style={{ flexDirection: 'row', gap: space.sm }}>
+              <MacroTile
+                label="Carbs"
+                value={`${perServing.c}g`}
+                bg={t.warnSoft}
+                valueColor={t.carbs}
+                labelColor={t.carbs}
+                t={t}
+              />
+              <MacroTile
+                label="Fat"
+                value={`${perServing.f}g`}
+                bg={t.tealSoft}
+                valueColor={t.teal}
+                labelColor={t.teal}
+                t={t}
+              />
+            </View>
+          </View>
+        </ScrollView>
+
+        {/* Save button */}
+        <View
+          style={{
+            paddingHorizontal: space.lg,
+            paddingTop: space.sm,
+            paddingBottom: insets.bottom + space.md,
+          }}
+        >
+          <Pressable
+            onPress={handleSave}
+            disabled={!canSave || saving}
+            style={({ pressed }) => ({
+              height: 52,
+              borderRadius: radius.lg,
+              backgroundColor: t.teal,
+              alignItems: 'center',
+              justifyContent: 'center',
+              opacity: saving ? 0.6 : canSave ? (pressed ? 0.85 : 1) : 0.4,
+            })}
+          >
+            {saving ? (
+              <ActivityIndicator color={t.textOnPrim} />
+            ) : (
+              <Text style={[typo.headline, { color: t.textOnPrim }]}>
+                Save recipe
+              </Text>
+            )}
+          </Pressable>
+        </View>
+      </KeyboardAvoidingView>
+
+      {/* Import URL sheet */}
+      <Modal
+        visible={importOpen}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setImportOpen(false)}
+      >
+        <Pressable
+          onPress={() => setImportOpen(false)}
+          style={{
+            flex: 1,
+            backgroundColor: t.scrim,
+            justifyContent: 'flex-end',
+          }}
+        >
+          <Pressable
+            onPress={(e) => e.stopPropagation()}
+            style={{
+              backgroundColor: t.surface,
+              borderTopLeftRadius: radius.xl,
+              borderTopRightRadius: radius.xl,
+              padding: space.xl,
+              paddingBottom: insets.bottom + space.lg,
+            }}
+          >
+            <Text style={[typo.title3, { color: t.text }]}>
+              Import recipe
+            </Text>
+            <Text
+              style={[
+                typo.subhead,
+                { color: t.textSec, marginTop: space.xs },
+              ]}
+            >
+              Paste a URL from any recipe website.
+            </Text>
+
+            <TextInput
+              value={importUrl}
+              onChangeText={setImportUrl}
+              placeholder="https://..."
+              placeholderTextColor={t.textTer}
+              keyboardType="url"
+              autoCapitalize="none"
+              autoCorrect={false}
+              returnKeyType="go"
+              onSubmitEditing={handleImport}
+              style={[
+                typo.body,
+                {
+                  marginTop: space.lg,
+                  backgroundColor: t.surface2,
+                  borderRadius: radius.lg,
+                  paddingHorizontal: space.lg,
+                  paddingVertical: space.sm,
+                  color: t.text,
+                },
+              ]}
+            />
+
+            <Pressable
+              onPress={handleImport}
+              style={({ pressed }) => ({
+                marginTop: space.lg,
+                height: 52,
+                borderRadius: radius.lg,
+                backgroundColor: t.primary,
+                alignItems: 'center',
+                justifyContent: 'center',
+                opacity: pressed ? 0.85 : 1,
+              })}
+            >
+              <Text style={[typo.headline, { color: t.textOnPrim }]}>
+                Import
+              </Text>
+            </Pressable>
+
+            <Pressable
+              hitSlop={6}
+              onPress={() => setImportOpen(false)}
+              style={({ pressed }) => ({
+                alignSelf: 'center',
+                marginTop: space.md,
+                opacity: pressed ? 0.6 : 1,
+              })}
+            >
+              <Text style={[typo.subhead, { color: t.textSec }]}>
+                Cancel
+              </Text>
+            </Pressable>
+          </Pressable>
+        </Pressable>
+      </Modal>
+
+      <Toast
+        message={toast.message}
+        visible={toast.visible}
+        type={toast.type}
+        duration={toast.duration}
+        onHide={toast.hide}
+      />
+    </SafeAreaView>
+  );
+}

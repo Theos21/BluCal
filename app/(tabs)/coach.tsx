@@ -24,6 +24,13 @@ import {
 } from '../../lib/db';
 import { calculateAge, calculateMacroTargets } from '../../lib/macroCalculator';
 import type { MacroTarget, Pace, WeightEntry } from '../../lib/types';
+import Toast from '../../components/Toast';
+import { useToast } from '../../lib/useToast';
+import {
+  askCoach,
+  type CoachContext,
+  type CoachMessage,
+} from '../../lib/coach';
 
 type Role = 'user' | 'coach';
 
@@ -35,53 +42,18 @@ type ChatMessage = {
   isTyping?: boolean;
 };
 
-// Welcome / onboarding thread shown until the live coach is wired up.
-const mockMessages: ChatMessage[] = [
-  {
-    id: '1',
-    role: 'coach',
-    text: "Hey! I've been looking at your logs this week. Really solid protein consistency. You hit your target 6 out of 7 days.",
-    time: '9:01 AM',
-  },
-  {
-    id: '2',
-    role: 'user',
-    text: 'Thanks! I felt like Sunday was rough though.',
-    time: '9:03 AM',
-  },
-  {
-    id: '3',
-    role: 'coach',
-    text: 'Sunday your protein came in at 89g vs your 160g target. Try adding a Greek yogurt or protein shake as an evening snack. Quick win.',
-    time: '9:03 AM',
-  },
-  {
-    id: '4',
-    role: 'user',
-    text: 'Good idea. Should I adjust my lunch too?',
-    time: '9:05 AM',
-  },
-  {
-    id: '5',
-    role: 'coach',
-    text: 'Your lunches are actually great, averaging 52g protein. The gap is almost entirely in the evening. Keep lunch as is.',
-    time: '9:05 AM',
-  },
-];
-
-// Canned coach replies used while live LLM responses are not wired.
-const mockReplies = [
-  "Great question! Based on your recent logs, I'd suggest focusing on consistency over the next week.",
-  "Your weight trend is looking really good. You're losing at a sustainable pace.",
-  'I noticed your carbs have been a bit low the last few days. That might be affecting your energy levels.',
-  'Keep it up! Your momentum score has been climbing steadily this week.',
-];
-
 const INSIGHT_DAYS_NEEDED = 4;
 
-// TODO: replace with a personalised insight derived from real logs.
+// Static fallback used until the first live insight resolves (or if it
+// fails). Kept generic so it does not contradict the user's real data.
 const WEEKLY_INSIGHT =
-  'You hit your protein target 6 out of 7 days this week. Your lowest day was Sunday at 89g. Try adding a snack that evening.';
+  'Keep logging consistently. Personalized insights appear here once your week has a few days of data.';
+
+// Map local UI chat shape to the wire shape (role: 'user' | 'assistant').
+const toCoachMessage = (m: ChatMessage): CoachMessage => ({
+  role: m.role === 'coach' ? 'assistant' : 'user',
+  content: m.text,
+});
 
 function formatTime(d: Date): string {
   let h = d.getHours();
@@ -256,9 +228,11 @@ function SummaryCard({
 function InsightCard({
   hasInsightData,
   daysLogged,
+  insight,
 }: {
   hasInsightData: boolean;
   daysLogged: number;
+  insight: string;
 }) {
   const t = useTheme();
   if (!hasInsightData) {
@@ -352,7 +326,7 @@ function InsightCard({
           style={{ marginTop: 2 }}
         />
         <Text style={[typo.subhead, { color: t.text, flex: 1 }]}>
-          {WEEKLY_INSIGHT}
+          {insight}
         </Text>
       </View>
     </View>
@@ -514,13 +488,17 @@ function CoachBubble({ message }: { message: ChatMessage }) {
 export default function Coach() {
   const t = useTheme();
   const insets = useSafeAreaInsets();
+  const toast = useToast();
   const { user, profile } = useAuth();
 
-  const [messages, setMessages] = useState<ChatMessage[]>(mockMessages);
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState('');
+  const [insight, setInsight] = useState<string>(WEEKLY_INSIGHT);
+  const welcomeSeeded = useRef(false);
+  const insightFetched = useRef(false);
 
   // Summary card data
-  const [, setMacroTarget] = useState<MacroTarget | null>(null);
+  const [macroTarget, setMacroTarget] = useState<MacroTarget | null>(null);
   const [weightEntries, setWeightEntries] = useState<WeightEntry[]>([]);
   const [weeklyAvgCal, setWeeklyAvgCal] = useState(0);
   const [streak, setStreak] = useState(0);
@@ -573,47 +551,6 @@ export default function Coach() {
   );
 
   const canSend = input.trim().length > 0;
-
-  const handleSend = () => {
-    if (!canSend) return;
-    const text = input.trim();
-    const now = new Date();
-    const sendId = Date.now();
-    const userMsg: ChatMessage = {
-      id: `u-${sendId}`,
-      role: 'user',
-      text,
-      time: formatTime(now),
-    };
-    const typingId = `typing-${sendId}`;
-    const typingMsg: ChatMessage = {
-      id: typingId,
-      role: 'coach',
-      text: '',
-      time: '',
-      isTyping: true,
-    };
-    setMessages((prev) => [...prev, userMsg, typingMsg]);
-    setInput('');
-
-    setTimeout(() => {
-      const reply =
-        mockReplies[Math.floor(Math.random() * mockReplies.length)];
-      setMessages((prev) =>
-        prev.map((m) =>
-          m.id === typingId
-            ? {
-                id: `c-${Date.now()}`,
-                role: 'coach',
-                text: reply,
-                time: formatTime(new Date()),
-                isTyping: false,
-              }
-            : m,
-        ),
-      );
-    }, 1500);
-  };
 
   // ── Derived summary values ──────────────────────────────────────────────
   const avgCalLabel =
@@ -685,6 +622,113 @@ export default function Coach() {
   const hasInsightData = weeklyAvgCal > 0 || weightEntries.length > 0;
   const daysLogged = Math.min(streak, INSIGHT_DAYS_NEEDED);
 
+  const buildContext = useCallback(
+    (): CoachContext => ({
+      weeklyAvgCal,
+      targetCal: macroTarget?.calories ?? 2000,
+      weightTrend: weightTrend.label,
+      streak,
+      goalPacing,
+      goal: profile?.goal ?? 'not set',
+      pace: profile?.pace ?? 'moderate',
+      topMissedMacro: null,
+      daysLogged,
+      userName: profile?.name ?? '',
+    }),
+    [
+      weeklyAvgCal,
+      macroTarget,
+      weightTrend.label,
+      streak,
+      goalPacing,
+      profile,
+      daysLogged,
+    ],
+  );
+
+  const handleSend = async () => {
+    if (!canSend || !user) return;
+    const text = input.trim();
+    const sendId = Date.now();
+    const userMsg: ChatMessage = {
+      id: `u-${sendId}`,
+      role: 'user',
+      text,
+      time: formatTime(new Date()),
+    };
+    const typingId = `typing-${sendId}`;
+    const typingMsg: ChatMessage = {
+      id: typingId,
+      role: 'coach',
+      text: '',
+      time: '',
+      isTyping: true,
+    };
+    // Capture history BEFORE adding the new user message — the edge function
+    // appends `userMessage` to `conversationHistory` server-side.
+    const history = messages.filter((m) => !m.isTyping).map(toCoachMessage);
+    setMessages((prev) => [...prev, userMsg, typingMsg]);
+    setInput('');
+
+    try {
+      const reply = await askCoach(text, buildContext(), history);
+      setMessages((prev) =>
+        prev.map((m) =>
+          m.id === typingId
+            ? {
+                id: `c-${Date.now()}`,
+                role: 'coach',
+                text: reply,
+                time: formatTime(new Date()),
+                isTyping: false,
+              }
+            : m,
+        ),
+      );
+    } catch (e) {
+      console.error(e);
+      setMessages((prev) => prev.filter((m) => m.id !== typingId));
+      toast.show('Could not reach coach. Try again.', 'error');
+    }
+  };
+
+  // Seed the welcome bubble once `profile` is available, so we can address
+  // the user by first name on first render.
+  useEffect(() => {
+    if (welcomeSeeded.current) return;
+    if (!profile) return;
+    welcomeSeeded.current = true;
+    const firstName = profile.name?.split(' ')[0];
+    const greeting = firstName ? ` ${firstName}` : '';
+    setMessages([
+      {
+        id: 'welcome',
+        role: 'coach',
+        text: `Hey${greeting}! I am your BluCal coach. I can see your nutrition data and help you stay on track. What would you like to know?`,
+        time: formatTime(new Date()),
+      },
+    ]);
+  }, [profile]);
+
+  // Fetch a proactive weekly insight once we have enough data. Runs at most
+  // once per mount; allow retry if the call fails so a transient error does
+  // not strand the user on the static fallback.
+  useEffect(() => {
+    if (insightFetched.current) return;
+    if (!hasInsightData || !user || !profile) return;
+    insightFetched.current = true;
+    askCoach(
+      'Give me one specific insight about my nutrition this week in 2 sentences. Be specific about my actual numbers.',
+      buildContext(),
+      [],
+    )
+      .then(setInsight)
+      .catch((err) => {
+        console.error(err);
+        insightFetched.current = false;
+      });
+  }, [hasInsightData, user, profile, buildContext]);
+
   // FlatList with `inverted` expects newest first
   const data = [...messages].reverse();
 
@@ -738,6 +782,7 @@ export default function Coach() {
               <InsightCard
                 hasInsightData={hasInsightData}
                 daysLogged={daysLogged}
+                insight={insight}
               />
             </View>
           }
@@ -798,6 +843,13 @@ export default function Coach() {
           </Pressable>
         </View>
       </KeyboardAvoidingView>
+      <Toast
+        message={toast.message}
+        visible={toast.visible}
+        type={toast.type}
+        duration={toast.duration}
+        onHide={toast.hide}
+      />
     </SafeAreaView>
   );
 }

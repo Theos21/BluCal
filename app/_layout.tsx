@@ -145,6 +145,10 @@ function RootNavigator() {
           name="edit-goals"
           options={{ presentation: 'modal', headerShown: false }}
         />
+        <Stack.Screen
+          name="add-to-plan"
+          options={{ presentation: 'modal', headerShown: false }}
+        />
       </Stack>
     </>
   );

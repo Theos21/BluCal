@@ -436,6 +436,69 @@ export const getRecipes = async (userId: string): Promise<Recipe[]> => {
   return (data ?? []) as Recipe[];
 };
 
+export interface RecipeWithMacros extends Recipe {
+  perServing: {
+    calories: number;
+    protein_g: number;
+    carbs_g: number;
+    fat_g: number;
+  };
+}
+
+// Returns each recipe along with per-serving macros, computed by summing
+// every ingredient's totals and dividing by `servings`. One ingredients
+// fetch is issued — not per-recipe — so this stays cheap on large libraries.
+export const getRecipesWithMacros = async (
+  userId: string,
+): Promise<RecipeWithMacros[]> => {
+  const recipes = await getRecipes(userId);
+  if (recipes.length === 0) return [];
+  const ids = recipes.map((r) => r.id);
+  const { data, error } = await supabase
+    .from('recipe_ingredients')
+    .select('recipe_id, calories, protein_g, carbs_g, fat_g')
+    .in('recipe_id', ids);
+  if (error) throw error;
+  const byRecipe: Record<string, RecipeWithMacros['perServing']> = {};
+  for (const ing of (data ?? []) as {
+    recipe_id: string;
+    calories: number;
+    protein_g: number;
+    carbs_g: number;
+    fat_g: number;
+  }[]) {
+    const acc = byRecipe[ing.recipe_id] ?? {
+      calories: 0,
+      protein_g: 0,
+      carbs_g: 0,
+      fat_g: 0,
+    };
+    acc.calories += Number(ing.calories) || 0;
+    acc.protein_g += Number(ing.protein_g) || 0;
+    acc.carbs_g += Number(ing.carbs_g) || 0;
+    acc.fat_g += Number(ing.fat_g) || 0;
+    byRecipe[ing.recipe_id] = acc;
+  }
+  return recipes.map((r) => {
+    const totals = byRecipe[r.id] ?? {
+      calories: 0,
+      protein_g: 0,
+      carbs_g: 0,
+      fat_g: 0,
+    };
+    const s = r.servings > 0 ? r.servings : 1;
+    return {
+      ...r,
+      perServing: {
+        calories: Math.round(totals.calories / s),
+        protein_g: Math.round(totals.protein_g / s),
+        carbs_g: Math.round(totals.carbs_g / s),
+        fat_g: Math.round(totals.fat_g / s),
+      },
+    };
+  });
+};
+
 export const addRecipe = async (
   recipe: Omit<Recipe, 'id' | 'created_at' | 'updated_at'>,
   ingredients: Omit<RecipeIngredient, 'id'>[],

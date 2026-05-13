@@ -1,15 +1,19 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
+  Modal,
   Pressable,
   ScrollView,
+  Share,
   Text,
   View,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import {
+  SafeAreaView,
+  useSafeAreaInsets,
+} from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { useFocusEffect } from 'expo-router';
+import { router, useFocusEffect } from 'expo-router';
 import { radius, space, type as typo, useTheme, type Theme } from '../../lib/theme';
 import Toast from '../../components/Toast';
 import { useToast } from '../../lib/useToast';
@@ -477,12 +481,55 @@ export default function Meals() {
     }
   };
 
+  const [shoppingOpen, setShoppingOpen] = useState(false);
+  const [shoppingChecked, setShoppingChecked] = useState<Set<string>>(
+    new Set(),
+  );
+
+  const shoppingList = useMemo(() => {
+    const map: Record<string, { amount: string; count: number }> = {};
+    for (const meal of plannedMeals) {
+      const key = meal.name.toLowerCase();
+      const existing = map[key];
+      if (existing) {
+        existing.count += 1;
+      } else {
+        map[key] = {
+          amount: meal.portion_description ?? '1 serving',
+          count: 1,
+        };
+      }
+    }
+    return Object.entries(map).map(([name, v]) => ({
+      name,
+      amount: v.amount,
+      mealCount: v.count,
+    }));
+  }, [plannedMeals]);
+
   const handleShoppingList = () => {
-    Alert.alert(
-      'Coming soon',
-      'Shopping list generation will be available once you have meals planned.',
-    );
+    setShoppingChecked(new Set());
+    setShoppingOpen(true);
   };
+
+  const handleShareShoppingList = () => {
+    const lines = shoppingList.map(
+      (item) => `• ${item.name} (${item.amount}) × ${item.mealCount}`,
+    );
+    const message = `Shopping list\n\n${lines.join('\n')}`;
+    void Share.share({ message });
+  };
+
+  const toggleShoppingChecked = (name: string) => {
+    setShoppingChecked((prev) => {
+      const next = new Set(prev);
+      if (next.has(name)) next.delete(name);
+      else next.add(name);
+      return next;
+    });
+  };
+
+  const insets = useSafeAreaInsets();
 
   return (
     <SafeAreaView
@@ -700,6 +747,14 @@ export default function Meals() {
         {/* Add to plan — dashed primary button. Hidden for past days. */}
         {!isPast && (
           <Pressable
+            onPress={() =>
+              router.push({
+                pathname: '/add-to-plan',
+                params: {
+                  date: weekDates[selectedDay].toLocaleDateString('en-CA'),
+                },
+              })
+            }
             style={({ pressed }) => ({
               marginHorizontal: space.lg,
               marginTop: space.md,
@@ -793,6 +848,190 @@ export default function Meals() {
         duration={toast.duration}
         onHide={toast.hide}
       />
+
+      <Modal
+        visible={shoppingOpen}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setShoppingOpen(false)}
+      >
+        <Pressable
+          onPress={() => setShoppingOpen(false)}
+          style={{
+            flex: 1,
+            backgroundColor: t.scrim,
+            justifyContent: 'flex-end',
+          }}
+        >
+          <Pressable
+            onPress={(e) => e.stopPropagation()}
+            style={{
+              backgroundColor: t.surface,
+              borderTopLeftRadius: radius.xl,
+              borderTopRightRadius: radius.xl,
+              paddingHorizontal: space.xl,
+              paddingTop: space.lg,
+              paddingBottom: insets.bottom + space.xl,
+              maxHeight: '85%',
+            }}
+          >
+            <View style={{ alignItems: 'center' }}>
+              <View
+                style={{
+                  width: 36,
+                  height: 4,
+                  borderRadius: radius.pill,
+                  backgroundColor: t.surface3,
+                }}
+              />
+            </View>
+            <Text
+              style={[
+                typo.title3,
+                { color: t.text, marginTop: space.lg },
+              ]}
+            >
+              Shopping list
+            </Text>
+            <Text style={[typo.subhead, { color: t.textSec, marginTop: 2 }]}>
+              Based on your meals this week
+            </Text>
+
+            <ScrollView
+              style={{ marginTop: space.lg, maxHeight: 360 }}
+              showsVerticalScrollIndicator={false}
+            >
+              {shoppingList.length === 0 ? (
+                <Text
+                  style={[
+                    typo.footnote,
+                    {
+                      color: t.textTer,
+                      paddingVertical: space.lg,
+                      textAlign: 'center',
+                    },
+                  ]}
+                >
+                  No meals planned this week.
+                </Text>
+              ) : (
+                shoppingList.map((item, i) => {
+                  const checked = shoppingChecked.has(item.name);
+                  const isLast = i === shoppingList.length - 1;
+                  return (
+                    <View key={item.name}>
+                      <Pressable
+                        onPress={() => toggleShoppingChecked(item.name)}
+                        style={({ pressed }) => ({
+                          flexDirection: 'row',
+                          alignItems: 'center',
+                          gap: 12,
+                          paddingVertical: 12,
+                          opacity: pressed ? 0.6 : 1,
+                        })}
+                      >
+                        <View
+                          style={{
+                            width: 22,
+                            height: 22,
+                            borderRadius: 11,
+                            backgroundColor: checked ? t.primary : t.surface2,
+                            borderWidth: checked ? 0 : 1,
+                            borderColor: t.hairline,
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                          }}
+                        >
+                          {checked && (
+                            <Ionicons
+                              name="checkmark"
+                              size={14}
+                              color={t.textOnPrim}
+                            />
+                          )}
+                        </View>
+                        <View style={{ flex: 1, minWidth: 0 }}>
+                          <Text
+                            style={[
+                              typo.subhead,
+                              {
+                                color: checked ? t.textTer : t.text,
+                                textDecorationLine: checked
+                                  ? 'line-through'
+                                  : 'none',
+                              },
+                            ]}
+                            numberOfLines={1}
+                          >
+                            {item.name}
+                          </Text>
+                          <Text
+                            style={[
+                              typo.caption1,
+                              { color: t.textSec, marginTop: 2 },
+                            ]}
+                            numberOfLines={1}
+                          >
+                            {`${item.amount} · ${item.mealCount} meal${item.mealCount === 1 ? '' : 's'}`}
+                          </Text>
+                        </View>
+                      </Pressable>
+                      {!isLast && (
+                        <View
+                          style={{
+                            height: 0.5,
+                            backgroundColor: t.hairline,
+                            marginLeft: 22 + 12,
+                          }}
+                        />
+                      )}
+                    </View>
+                  );
+                })
+              )}
+            </ScrollView>
+
+            <Pressable
+              onPress={handleShareShoppingList}
+              disabled={shoppingList.length === 0}
+              style={({ pressed }) => ({
+                marginTop: space.lg,
+                height: 48,
+                borderRadius: radius.lg,
+                backgroundColor: t.surface2,
+                flexDirection: 'row',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: space.sm,
+                opacity:
+                  shoppingList.length === 0 ? 0.4 : pressed ? 0.6 : 1,
+              })}
+            >
+              <Ionicons name="share-outline" size={18} color={t.text} />
+              <Text style={[typo.subhead, { color: t.text }]}>
+                Share list
+              </Text>
+            </Pressable>
+
+            <Pressable
+              onPress={() => setShoppingOpen(false)}
+              style={({ pressed }) => ({
+                marginTop: space.md,
+                height: 52,
+                borderRadius: radius.lg,
+                backgroundColor: t.primary,
+                alignItems: 'center',
+                justifyContent: 'center',
+                opacity: pressed ? 0.85 : 1,
+              })}
+            >
+              <Text style={[typo.headline, { color: t.textOnPrim }]}>
+                Done
+              </Text>
+            </Pressable>
+          </Pressable>
+        </Pressable>
+      </Modal>
     </SafeAreaView>
   );
 }

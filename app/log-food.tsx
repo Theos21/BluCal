@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
+  Animated,
   Pressable,
   ScrollView,
   Text,
@@ -10,6 +11,10 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
+import {
+  ExpoSpeechRecognitionModule,
+  useSpeechRecognitionEvent,
+} from 'expo-speech-recognition';
 import { radius, space, type as typo, useTheme } from '../lib/theme';
 import Toast from '../components/Toast';
 import { useToast } from '../lib/useToast';
@@ -73,9 +78,15 @@ function Header() {
 function SearchBar({
   value,
   onChangeText,
+  recognizing,
+  micPulse,
+  onMicPress,
 }: {
   value: string;
   onChangeText: (v: string) => void;
+  recognizing: boolean;
+  micPulse: Animated.Value;
+  onMicPress: () => void;
 }) {
   const t = useTheme();
   return (
@@ -106,8 +117,14 @@ function SearchBar({
       <Pressable hitSlop={6} onPress={() => router.push('/barcode-scanner')}>
         <Ionicons name="barcode-outline" size={22} color={t.textSec} />
       </Pressable>
-      <Pressable hitSlop={6}>
-        <Ionicons name="mic-outline" size={20} color={t.textSec} />
+      <Pressable hitSlop={6} onPress={onMicPress}>
+        <Animated.View style={{ transform: [{ scale: micPulse }] }}>
+          <Ionicons
+            name={recognizing ? 'mic' : 'mic-outline'}
+            size={20}
+            color={recognizing ? t.danger : t.textSec}
+          />
+        </Animated.View>
       </Pressable>
     </View>
   );
@@ -412,6 +429,62 @@ export default function LogFood() {
   const [searching, setSearching] = useState(false);
   const searchTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  const [recognizing, setRecognizing] = useState(false);
+  const micPulse = useRef(new Animated.Value(1)).current;
+
+  useSpeechRecognitionEvent('start', () => setRecognizing(true));
+  useSpeechRecognitionEvent('end', () => setRecognizing(false));
+  useSpeechRecognitionEvent('result', (event) => {
+    const first = event.results?.[0];
+    if (event.isFinal && first?.transcript) {
+      setSearchQuery(first.transcript);
+      handleSearchChange(first.transcript);
+    }
+  });
+  useSpeechRecognitionEvent('error', (event) => {
+    console.error('Speech recognition error:', event.error, event.message);
+    toast.show('Could not understand audio. Try again.', 'error');
+  });
+
+  useEffect(() => {
+    if (recognizing) {
+      Animated.loop(
+        Animated.sequence([
+          Animated.timing(micPulse, {
+            toValue: 1.3,
+            duration: 600,
+            useNativeDriver: true,
+          }),
+          Animated.timing(micPulse, {
+            toValue: 1,
+            duration: 600,
+            useNativeDriver: true,
+          }),
+        ]),
+      ).start();
+    } else {
+      micPulse.stopAnimation();
+      micPulse.setValue(1);
+    }
+  }, [recognizing, micPulse]);
+
+  const handleVoiceInput = async () => {
+    if (recognizing) {
+      ExpoSpeechRecognitionModule.stop();
+      return;
+    }
+    const { granted } =
+      await ExpoSpeechRecognitionModule.requestPermissionsAsync();
+    if (!granted) {
+      toast.show('Microphone permission required for voice logging.', 'info');
+      return;
+    }
+    ExpoSpeechRecognitionModule.start({
+      lang: 'en-US',
+      interimResults: false,
+    });
+  };
+
   useEffect(() => {
     if (!user) {
       setLoading(false);
@@ -542,7 +615,31 @@ export default function LogFood() {
         contentContainerStyle={{ paddingBottom: 32 }}
         keyboardShouldPersistTaps="handled"
       >
-        <SearchBar value={searchQuery} onChangeText={handleSearchChange} />
+        <SearchBar
+          value={searchQuery}
+          onChangeText={handleSearchChange}
+          recognizing={recognizing}
+          micPulse={micPulse}
+          onMicPress={handleVoiceInput}
+        />
+        {recognizing && (
+          <View
+            style={{
+              flexDirection: 'row',
+              alignItems: 'center',
+              gap: space.sm,
+              paddingHorizontal: space.lg,
+              paddingTop: space.xs,
+            }}
+          >
+            <Animated.View style={{ transform: [{ scale: micPulse }] }}>
+              <Ionicons name="mic" size={14} color={t.danger} />
+            </Animated.View>
+            <Text style={[typo.caption1, { color: t.danger }]}>
+              Listening... tap mic to stop
+            </Text>
+          </View>
+        )}
         <QuickActions />
 
         {isSearching ? (

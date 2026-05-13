@@ -51,6 +51,13 @@
           "color": "#185FA5",
           "sounds": []
         }
+      ],
+      [
+        "expo-speech-recognition",
+        {
+          "microphonePermission": "BluCal uses your microphone to let you log food by voice.",
+          "speechRecognitionPermission": "BluCal uses speech recognition to convert your voice into food searches."
+        }
       ]
     ]
   }

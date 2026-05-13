@@ -267,6 +267,11 @@ export default function Today() {
   const [feelingDismissed, setFeelingDismissed] = useState(false);
   const toast = useToast();
 
+  // Throttle re-fetches on tab focus. Tab focus fires often (navigating
+  // back from modals, sub-screens, etc.) and a full reload each time is
+  // wasteful and causes a loading flicker on screens that already have data.
+  const lastLoadTime = useRef<number>(0);
+
   const loadTodayData = useCallback(async () => {
     if (!user) {
       setLoading(false);
@@ -288,6 +293,7 @@ export default function Today() {
       setStreak(currentStreak);
       setWaterOz(water);
       setHasFeelingToday(feelings.length > 0);
+      lastLoadTime.current = Date.now();
     } catch {
       setError('Could not load your food log. Pull down to retry.');
     } finally {
@@ -316,8 +322,15 @@ export default function Today() {
         toast.show(`Added: ${logged}`, 'success');
         sessionState.setJustLoggedFood(null);
       }
-      void loadTodayData();
-    }, [loadTodayData, toast]),
+      if (!user) return;
+      // Force a reload if the user just logged food (local state is now
+      // stale by definition); otherwise reload only when data is older
+      // than 60s.
+      const now = Date.now();
+      if (logged || now - lastLoadTime.current > 60000) {
+        void loadTodayData();
+      }
+    }, [user, loadTodayData, toast]),
   );
 
   const [showCelebration, setShowCelebration] = useState(false);

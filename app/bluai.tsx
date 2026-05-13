@@ -29,6 +29,7 @@ import { addFoodEntry } from '../lib/db';
 import { sessionState } from '../lib/sessionState';
 import {
   analyzeMealPhoto,
+  BluAIException,
   refineMealAnalysis,
   type BluAIFoodItem,
   type BluAIMimeType,
@@ -315,8 +316,18 @@ export default function BluAI() {
       setPhase('results');
     } catch (e) {
       console.error(e);
+      if (e instanceof BluAIException && e.code === 'not_authenticated') {
+        toast.show(e.message, 'error');
+        router.replace('/(auth)/signin');
+      } else {
+        toast.show(
+          e instanceof BluAIException
+            ? e.message
+            : 'Could not analyze photo. Try again.',
+          'error',
+        );
+      }
       setPhase('camera');
-      toast.show('Could not analyze photo. Try again.', 'error');
     }
   };
 
@@ -378,8 +389,18 @@ export default function BluAI() {
       setPhase('results');
     } catch (e) {
       console.error(e);
+      if (e instanceof BluAIException && e.code === 'not_authenticated') {
+        toast.show(e.message, 'error');
+        router.replace('/(auth)/signin');
+        return;
+      }
       setPhase('results');
-      toast.show('Could not refine estimate. Try again.', 'error');
+      toast.show(
+        e instanceof BluAIException
+          ? e.message
+          : 'Could not refine estimate. Try again.',
+        'error',
+      );
     }
   };
 

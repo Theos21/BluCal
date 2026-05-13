@@ -18,16 +18,78 @@ export interface BluAIResult {
   questions: string[];
 }
 
+export type BluAIError =
+  | 'not_authenticated'
+  | 'network_error'
+  | 'analysis_failed'
+  | 'invalid_response';
+
+export class BluAIException extends Error {
+  constructor(
+    public code: BluAIError,
+    message: string,
+  ) {
+    super(message);
+    this.name = 'BluAIException';
+  }
+}
+
+const invokeBluAI = async (
+  body: Record<string, unknown>,
+): Promise<BluAIResult> => {
+  const {
+    data: { session },
+  } = await supabase.auth.getSession();
+  if (!session) {
+    throw new BluAIException(
+      'not_authenticated',
+      'Please sign in to use BluAI.',
+    );
+  }
+
+  const { data, error } = await supabase.functions.invoke('bluai', { body });
+
+  if (error) {
+    const msg = error.message?.toLowerCase() ?? '';
+    if (
+      msg.includes('401') ||
+      msg.includes('unauthorized') ||
+      msg.includes('jwt')
+    ) {
+      throw new BluAIException(
+        'not_authenticated',
+        'Session expired. Please sign in again.',
+      );
+    }
+    throw new BluAIException(
+      'network_error',
+      'Could not reach BluAI. Check your connection and try again.',
+    );
+  }
+
+  if (!data || data.error) {
+    throw new BluAIException(
+      'analysis_failed',
+      data?.error ?? 'BluAI could not analyze the image.',
+    );
+  }
+
+  if (!Array.isArray(data.items)) {
+    throw new BluAIException(
+      'invalid_response',
+      'Unexpected response from BluAI. Please try again.',
+    );
+  }
+
+  return data as BluAIResult;
+};
+
 export const analyzeMealPhoto = async (
   base64Image: string,
   mimeType: BluAIMimeType,
   userNotes?: string,
 ): Promise<BluAIResult> => {
-  const { data, error } = await supabase.functions.invoke('bluai', {
-    body: { base64Image, mimeType, userNotes, mode: 'analyze' },
-  });
-  if (error) throw error;
-  return data as BluAIResult;
+  return invokeBluAI({ base64Image, mimeType, userNotes, mode: 'analyze' });
 };
 
 export const refineMealAnalysis = async (
@@ -37,16 +99,12 @@ export const refineMealAnalysis = async (
   chipAnswers: Record<string, string>,
   userNote: string,
 ): Promise<BluAIResult> => {
-  const { data, error } = await supabase.functions.invoke('bluai', {
-    body: {
-      base64Image,
-      mimeType,
-      originalItems,
-      chipAnswers,
-      userNote,
-      mode: 'refine',
-    },
+  return invokeBluAI({
+    base64Image,
+    mimeType,
+    originalItems,
+    chipAnswers,
+    userNote,
+    mode: 'refine',
   });
-  if (error) throw error;
-  return data as BluAIResult;
 };

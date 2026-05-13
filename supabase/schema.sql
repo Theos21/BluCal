@@ -12,6 +12,14 @@ create table public.profiles (
   goal_weight_kg numeric,
   activity_level text check (activity_level in ('sedentary', 'light', 'moderate', 'very_active', 'athlete')),
   dietary_preferences text[] default '{}',
+  pace text default 'moderate' check (pace in ('slow', 'moderate', 'aggressive')),
+  apple_health_connected boolean default false,
+  notif_log_reminder boolean default true,
+  notif_log_reminder_hour integer default 20,
+  notif_weigh_in boolean default true,
+  notif_weigh_in_hour integer default 7,
+  notif_weekly_summary boolean default true,
+  notif_streak_alerts boolean default false,
   created_at timestamptz default now(),
   updated_at timestamptz default now()
 );
@@ -213,11 +221,6 @@ create trigger on_auth_user_created
   after insert on auth.users
   for each row execute procedure public.handle_new_user();
 
--- Pace setting (added later). Run this against existing databases to add the
--- column without dropping the table.
-alter table public.profiles add column if not exists
-  pace text default 'moderate' check (pace in ('slow', 'moderate', 'aggressive'));
-
 -- Water entries (added later)
 create table if not exists public.water_entries (
   id uuid default gen_random_uuid() primary key,
@@ -231,10 +234,6 @@ alter table public.water_entries enable row level security;
 
 create policy "users can manage own water entries"
   on public.water_entries for all using (auth.uid() = user_id);
-
--- Apple Health connection flag (added later)
-alter table public.profiles
-  add column if not exists apple_health_connected boolean default false;
 
 -- Push notification tokens (added later)
 create table if not exists public.push_tokens (

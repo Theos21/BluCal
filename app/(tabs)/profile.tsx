@@ -404,19 +404,48 @@ export default function Profile() {
   const [streak, setStreak] = useState(0);
   const [momentumScore, setMomentumScore] = useState(0);
   const [, setLoading] = useState(true);
-  const [logReminder, setLogReminder] = useState(false);
-  const [weighInReminder, setWeighInReminder] = useState(false);
-  const [weeklySummary, setWeeklySummary] = useState(false);
-  const [streakAlerts, setStreakAlerts] = useState(false);
+  const [logReminder, setLogReminder] = useState(
+    profile?.notif_log_reminder ?? true,
+  );
+  const [weighInReminder, setWeighInReminder] = useState(
+    profile?.notif_weigh_in ?? true,
+  );
+  const [weeklySummary, setWeeklySummary] = useState(
+    profile?.notif_weekly_summary ?? true,
+  );
+  const [streakAlerts, setStreakAlerts] = useState(
+    profile?.notif_streak_alerts ?? false,
+  );
+
+  // Sync toggles whenever the profile's notification fields change (e.g.,
+  // after sign-in or a refresh from another device).
+  useEffect(() => {
+    if (!profile) return;
+    setLogReminder(profile.notif_log_reminder ?? true);
+    setWeighInReminder(profile.notif_weigh_in ?? true);
+    setWeeklySummary(profile.notif_weekly_summary ?? true);
+    setStreakAlerts(profile.notif_streak_alerts ?? false);
+  }, [
+    profile?.notif_log_reminder,
+    profile?.notif_weigh_in,
+    profile?.notif_weekly_summary,
+    profile?.notif_streak_alerts,
+  ]);
 
   const handleLogReminderToggle = async (val: boolean) => {
     setLogReminder(val);
+    if (!user) return;
     try {
+      await updateProfile(user.id, { notif_log_reminder: val });
       if (val) {
-        await scheduleDailyLogReminder(20, 0);
+        await scheduleDailyLogReminder(
+          profile?.notif_log_reminder_hour ?? 20,
+          0,
+        );
       } else {
         await cancelAllNotifications();
-        if (weighInReminder) await scheduleWeighInReminder(7, 0);
+        if (weighInReminder)
+          await scheduleWeighInReminder(profile?.notif_weigh_in_hour ?? 7, 0);
         if (weeklySummary) await scheduleWeeklySummary();
       }
     } catch (e) {
@@ -426,8 +455,12 @@ export default function Profile() {
 
   const handleWeighInToggle = async (val: boolean) => {
     setWeighInReminder(val);
+    if (!user) return;
     try {
-      if (val) await scheduleWeighInReminder(7, 0);
+      await updateProfile(user.id, { notif_weigh_in: val });
+      if (val) {
+        await scheduleWeighInReminder(profile?.notif_weigh_in_hour ?? 7, 0);
+      }
     } catch (e) {
       console.error(e);
     }
@@ -435,8 +468,20 @@ export default function Profile() {
 
   const handleWeeklySummaryToggle = async (val: boolean) => {
     setWeeklySummary(val);
+    if (!user) return;
     try {
+      await updateProfile(user.id, { notif_weekly_summary: val });
       if (val) await scheduleWeeklySummary();
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const handleStreakAlertsToggle = async (val: boolean) => {
+    setStreakAlerts(val);
+    if (!user) return;
+    try {
+      await updateProfile(user.id, { notif_streak_alerts: val });
     } catch (e) {
       console.error(e);
     }
@@ -639,7 +684,7 @@ export default function Profile() {
           <SettingsRow
             label="Streak alerts"
             switchValue={streakAlerts}
-            onSwitchChange={setStreakAlerts}
+            onSwitchChange={handleStreakAlertsToggle}
             isLast
           />
         </Section>

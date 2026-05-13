@@ -700,6 +700,12 @@ export default function Profile() {
             onPress={handleAppleHealth}
           />
           <SettingsRow
+            icon="watch-outline"
+            label="Apple Watch"
+            value="Coming soon"
+            valueColor={t.textTer}
+          />
+          <SettingsRow
             icon="speedometer-outline"
             label="Connected scale"
             value="Not connected"

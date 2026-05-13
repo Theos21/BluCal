@@ -5,8 +5,7 @@
   "build": {
     "development": {
       "developmentClient": true,
-      "distribution": "internal",
-      "node": "20.0.0"
+      "distribution": "internal"
     },
     "preview": {
       "distribution": "internal",
@@ -18,8 +17,9 @@
       "ios": {
         "buildConfiguration": "Release"
       },
-      "node": "20.0.0",
-      "npm": "10.0.0"
+      "env": {
+        "NPM_CONFIG_LEGACY_PEER_DEPS": "true"
+      }
     }
   },
   "submit": {

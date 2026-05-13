@@ -18,7 +18,9 @@
         "buildConfiguration": "Release"
       },
       "env": {
-        "NPM_CONFIG_LEGACY_PEER_DEPS": "true"
+        "NPM_CONFIG_LEGACY_PEER_DEPS": "true",
+        "EXPO_PUBLIC_SUPABASE_URL": "https://inkpjlzostfaknvdfmte.supabase.co",
+        "EXPO_PUBLIC_SUPABASE_ANON_KEY": "sb_publishable_pDz0Hhg0PVFCdEnhQP-6Tw_fViKmOTb"
       }
     }
   },

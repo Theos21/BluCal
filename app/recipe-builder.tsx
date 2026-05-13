@@ -19,6 +19,7 @@ import Toast from '../components/Toast';
 import { useToast } from '../lib/useToast';
 import { useAuth } from '../lib/AuthContext';
 import { addRecipe } from '../lib/db';
+import { importRecipeFromUrl } from '../lib/recipeImport';
 
 const YIELD_UNITS = ['g', 'oz', 'ml', 'cups', 'pieces'] as const;
 
@@ -184,6 +185,7 @@ export default function RecipeBuilder() {
 
   const [importOpen, setImportOpen] = useState(false);
   const [importUrl, setImportUrl] = useState('');
+  const [importing, setImporting] = useState(false);
 
   const totals = ingredients.reduce(
     (acc, i) => ({
@@ -240,10 +242,38 @@ export default function RecipeBuilder() {
     }
   };
 
-  const handleImport = () => {
-    toast.show('Recipe import coming soon', 'info');
-    setImportOpen(false);
-    setImportUrl('');
+  const handleImport = async () => {
+    const url = importUrl.trim();
+    if (!url || importing) return;
+    setImporting(true);
+    try {
+      const recipe = await importRecipeFromUrl(url);
+      setRecipeName(recipe.name);
+      setServings(recipe.servings);
+      setIngredients(
+        recipe.ingredients.map((ing, i) => ({
+          id: String(i + 1),
+          name: ing.name,
+          quantity: ing.quantity,
+          unit: ing.unit,
+          cal: ing.calories,
+          p: ing.protein_g,
+          c: ing.carbs_g,
+          f: ing.fat_g,
+        })),
+      );
+      setImportUrl('');
+      setImportOpen(false);
+      toast.show(`Imported: ${recipe.name}`, 'success');
+    } catch (e) {
+      const message =
+        e instanceof Error
+          ? e.message
+          : 'Could not import recipe. Try again.';
+      toast.show(message, 'error');
+    } finally {
+      setImporting(false);
+    }
   };
 
   const removeIngredient = (id: string) => {
@@ -718,6 +748,7 @@ export default function RecipeBuilder() {
 
             <Pressable
               onPress={handleImport}
+              disabled={importing || !importUrl.trim()}
               style={({ pressed }) => ({
                 marginTop: space.lg,
                 height: 52,
@@ -725,12 +756,32 @@ export default function RecipeBuilder() {
                 backgroundColor: t.primary,
                 alignItems: 'center',
                 justifyContent: 'center',
-                opacity: pressed ? 0.85 : 1,
+                opacity:
+                  importing || !importUrl.trim()
+                    ? 0.4
+                    : pressed
+                      ? 0.85
+                      : 1,
               })}
             >
-              <Text style={[typo.headline, { color: t.textOnPrim }]}>
-                Import
-              </Text>
+              {importing ? (
+                <View
+                  style={{
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    gap: space.sm,
+                  }}
+                >
+                  <ActivityIndicator color={t.textOnPrim} />
+                  <Text style={[typo.headline, { color: t.textOnPrim }]}>
+                    Importing...
+                  </Text>
+                </View>
+              ) : (
+                <Text style={[typo.headline, { color: t.textOnPrim }]}>
+                  Import
+                </Text>
+              )}
             </Pressable>
 
             <Pressable

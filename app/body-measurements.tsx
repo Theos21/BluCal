@@ -2,9 +2,11 @@ import { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  Image,
   Modal,
   Pressable,
   ScrollView,
+  Share,
   Text,
   TextInput,
   View,
@@ -13,11 +15,19 @@ import {
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
+import * as ImagePicker from 'expo-image-picker';
 import { radius, space, type as typo, useTheme, type Theme } from '../lib/theme';
 import Toast from '../components/Toast';
 import { useToast } from '../lib/useToast';
 import { useAuth } from '../lib/AuthContext';
-import { addMeasurement, getMeasurements } from '../lib/db';
+import {
+  addMeasurement,
+  addProgressPhoto,
+  deleteProgressPhoto,
+  getMeasurements,
+  getProgressPhotos,
+  type ProgressPhotoWithUrl,
+} from '../lib/db';
 import type { Measurement } from '../lib/types';
 
 const MEASUREMENT_KEYS: { key: string; label: string }[] = [
@@ -37,15 +47,6 @@ const MEASUREMENT_KEYS: { key: string; label: string }[] = [
 const BODY_FAT_LABEL =
   MEASUREMENT_KEYS.find((m) => m.key === 'body_fat')?.label ?? 'Body fat %';
 const NON_BODY_FAT_KEYS = MEASUREMENT_KEYS.filter((m) => m.key !== 'body_fat');
-
-// Photo placeholder tiles kept intentionally so the photo grid layout
-// remains visible before progress photos are wired up.
-// TODO: replace with real data from Supabase
-const mockPhotos = [
-  { id: '1', date: 'May 1' },
-  { id: '2', date: 'Apr 15' },
-  { id: '3', date: 'Apr 1' },
-];
 
 type SheetTarget = {
   key: string;
@@ -142,6 +143,16 @@ export default function BodyMeasurements() {
   const [inputValue, setInputValue] = useState('');
   const [inputUnit, setInputUnit] = useState<'in' | 'cm' | '%'>('in');
 
+  const [photos, setPhotos] = useState<ProgressPhotoWithUrl[]>([]);
+  const [uploading, setUploading] = useState(false);
+  const [selectedPhoto, setSelectedPhoto] =
+    useState<ProgressPhotoWithUrl | null>(null);
+  const [compareOpen, setCompareOpen] = useState(false);
+  const [compareBefore, setCompareBefore] =
+    useState<ProgressPhotoWithUrl | null>(null);
+  const [compareAfter, setCompareAfter] =
+    useState<ProgressPhotoWithUrl | null>(null);
+
   const displayUnit: 'in' | 'cm' = profile?.is_metric ? 'cm' : 'in';
 
   useEffect(() => {
@@ -150,6 +161,7 @@ export default function BodyMeasurements() {
       .then(setMeasurements)
       .catch(console.error)
       .finally(() => setLoading(false));
+    getProgressPhotos(user.id).then(setPhotos).catch(console.error);
   }, [user]);
 
   const getLatestMeasurement = (type: string): Measurement | null => {
@@ -234,19 +246,78 @@ export default function BodyMeasurements() {
     );
   };
 
-  const handleAddPhoto = () => {
-    Alert.alert(
-      'Coming soon',
-      'Progress photos will be available in a future update.',
-    );
+  const handleAddPhoto = async () => {
+    if (!user) return;
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      quality: 0.8,
+      allowsEditing: true,
+      aspect: [3, 4],
+    });
+    if (result.canceled || !result.assets[0]) return;
+
+    const asset = result.assets[0];
+    try {
+      setUploading(true);
+      await addProgressPhoto(user.id, asset.uri, new Date().toISOString());
+      const updated = await getProgressPhotos(user.id);
+      setPhotos(updated);
+      toast.show('Photo saved', 'success');
+    } catch (e) {
+      console.error(e);
+      toast.show('Could not save photo. Try again.', 'error');
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const handleDeletePhoto = (photo: ProgressPhotoWithUrl) => {
+    Alert.alert('Delete photo?', 'This cannot be undone.', [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Delete',
+        style: 'destructive',
+        onPress: async () => {
+          try {
+            await deleteProgressPhoto(photo);
+            setPhotos((prev) => prev.filter((p) => p.id !== photo.id));
+            if (selectedPhoto?.id === photo.id) setSelectedPhoto(null);
+            toast.show('Photo deleted', 'success');
+          } catch (e) {
+            console.error(e);
+            toast.show('Could not delete photo.', 'error');
+          }
+        },
+      },
+    ]);
+  };
+
+  const handleSharePhoto = async (photo: ProgressPhotoWithUrl) => {
+    try {
+      await Share.share({ url: photo.signedUrl, message: 'My BluCal progress' });
+    } catch (e) {
+      console.error(e);
+    }
   };
 
   const handleCompare = () => {
-    Alert.alert(
-      'Coming soon',
-      'Photo comparison will be available in a future update.',
-    );
+    if (photos.length < 2) {
+      Alert.alert(
+        'Add more photos',
+        'Add at least 2 photos to compare progress.',
+      );
+      return;
+    }
+    setCompareBefore(photos[photos.length - 1] ?? null);
+    setCompareAfter(photos[0] ?? null);
+    setCompareOpen(true);
   };
+
+  const formatPhotoDate = (iso: string): string =>
+    new Date(iso).toLocaleDateString('en-US', {
+      month: 'short',
+      day: 'numeric',
+    });
 
   // 48 = 16 margin each side + 8 gap between 3 tiles. Floor so widths
   // are integer pixels and three tiles always fit on a single row.
@@ -439,6 +510,7 @@ export default function BodyMeasurements() {
         >
           <Pressable
             onPress={handleAddPhoto}
+            disabled={uploading}
             style={({ pressed }) => ({
               width: tileSize,
               height: tileSize,
@@ -450,33 +522,55 @@ export default function BodyMeasurements() {
               alignItems: 'center',
               justifyContent: 'center',
               gap: 4,
-              opacity: pressed ? 0.6 : 1,
+              opacity: uploading ? 0.5 : pressed ? 0.6 : 1,
             })}
           >
-            <Ionicons name="camera-outline" size={28} color={t.primary} />
-            <Text style={[typo.caption2, { color: t.primary }]}>
-              Add photo
-            </Text>
+            {uploading ? (
+              <ActivityIndicator color={t.primary} />
+            ) : (
+              <>
+                <Ionicons name="camera-outline" size={28} color={t.primary} />
+                <Text style={[typo.caption2, { color: t.primary }]}>
+                  Add photo
+                </Text>
+              </>
+            )}
           </Pressable>
-          {mockPhotos.map((p) => (
-            <View
-              key={p.id}
-              style={{
+          {photos.map((photo) => (
+            <Pressable
+              key={photo.id}
+              onPress={() => setSelectedPhoto(photo)}
+              onLongPress={() => handleDeletePhoto(photo)}
+              style={({ pressed }) => ({
                 width: tileSize,
                 height: tileSize,
                 borderRadius: radius.md,
                 overflow: 'hidden',
                 backgroundColor: t.surface2,
-                alignItems: 'center',
-                justifyContent: 'center',
-                gap: 4,
-              }}
+                opacity: pressed ? 0.7 : 1,
+              })}
             >
-              <Ionicons name="image-outline" size={32} color={t.textTer} />
-              <Text style={[typo.caption2, { color: t.textTer }]}>
-                {p.date}
-              </Text>
-            </View>
+              <Image
+                source={{ uri: photo.signedUrl }}
+                style={{ width: '100%', height: '100%' }}
+                resizeMode="cover"
+              />
+              <View
+                style={{
+                  position: 'absolute',
+                  bottom: 4,
+                  left: 4,
+                  backgroundColor: 'rgba(0,0,0,0.5)',
+                  borderRadius: 4,
+                  paddingHorizontal: 4,
+                  paddingVertical: 2,
+                }}
+              >
+                <Text style={[typo.caption2, { color: '#FFFFFF' }]}>
+                  {formatPhotoDate(photo.taken_at)}
+                </Text>
+              </View>
+            </Pressable>
           ))}
         </View>
 
@@ -501,6 +595,348 @@ export default function BodyMeasurements() {
           </Text>
         </Pressable>
       </ScrollView>
+
+      {/* Photo viewer */}
+      <Modal
+        visible={selectedPhoto !== null}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setSelectedPhoto(null)}
+      >
+        <View style={{ flex: 1, backgroundColor: '#000' }}>
+          {selectedPhoto && (
+            <>
+              <Pressable
+                onLongPress={() => handleDeletePhoto(selectedPhoto)}
+                style={{ flex: 1, justifyContent: 'center' }}
+              >
+                <Image
+                  source={{ uri: selectedPhoto.signedUrl }}
+                  style={{ width: '100%', height: '100%' }}
+                  resizeMode="contain"
+                />
+              </Pressable>
+
+              {/* Top controls */}
+              <View
+                style={{
+                  position: 'absolute',
+                  top: insets.top + space.sm,
+                  left: 0,
+                  right: 0,
+                  flexDirection: 'row',
+                  justifyContent: 'space-between',
+                  paddingHorizontal: space.lg,
+                }}
+              >
+                <Pressable
+                  onPress={() => handleSharePhoto(selectedPhoto)}
+                  hitSlop={8}
+                  style={({ pressed }) => ({
+                    width: 36,
+                    height: 36,
+                    borderRadius: 18,
+                    backgroundColor: 'rgba(255,255,255,0.15)',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    opacity: pressed ? 0.6 : 1,
+                  })}
+                >
+                  <Ionicons
+                    name="share-outline"
+                    size={20}
+                    color="#FFFFFF"
+                  />
+                </Pressable>
+                <Pressable
+                  onPress={() => setSelectedPhoto(null)}
+                  hitSlop={8}
+                  style={({ pressed }) => ({
+                    width: 36,
+                    height: 36,
+                    borderRadius: 18,
+                    backgroundColor: 'rgba(255,255,255,0.15)',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    opacity: pressed ? 0.6 : 1,
+                  })}
+                >
+                  <Ionicons name="close" size={22} color="#FFFFFF" />
+                </Pressable>
+              </View>
+
+              {/* Bottom date label */}
+              <View
+                style={{
+                  position: 'absolute',
+                  bottom: insets.bottom + space.lg,
+                  left: 0,
+                  right: 0,
+                  alignItems: 'center',
+                }}
+              >
+                <Text style={[typo.subhead, { color: '#FFFFFF' }]}>
+                  {new Date(selectedPhoto.taken_at).toLocaleDateString(
+                    'en-US',
+                    {
+                      weekday: 'long',
+                      month: 'long',
+                      day: 'numeric',
+                      year: 'numeric',
+                    },
+                  )}
+                </Text>
+                <Text
+                  style={[
+                    typo.caption1,
+                    { color: 'rgba(255,255,255,0.5)', marginTop: 4 },
+                  ]}
+                >
+                  Long press to delete
+                </Text>
+              </View>
+            </>
+          )}
+        </View>
+      </Modal>
+
+      {/* Compare photos */}
+      <Modal
+        visible={compareOpen}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setCompareOpen(false)}
+      >
+        <Pressable
+          onPress={() => setCompareOpen(false)}
+          style={{
+            flex: 1,
+            backgroundColor: t.scrim,
+            justifyContent: 'flex-end',
+          }}
+        >
+          <Pressable
+            onPress={(e) => e.stopPropagation()}
+            style={{
+              backgroundColor: t.surface,
+              borderTopLeftRadius: radius.xl,
+              borderTopRightRadius: radius.xl,
+              paddingHorizontal: space.xl,
+              paddingTop: space.lg,
+              paddingBottom: insets.bottom + space.xl,
+              maxHeight: '90%',
+            }}
+          >
+            <View style={{ alignItems: 'center' }}>
+              <View
+                style={{
+                  width: 36,
+                  height: 4,
+                  borderRadius: radius.pill,
+                  backgroundColor: t.surface3,
+                }}
+              />
+            </View>
+            <Text
+              style={[typo.title3, { color: t.text, marginTop: space.lg }]}
+            >
+              Compare photos
+            </Text>
+            <Text
+              style={[typo.subhead, { color: t.textSec, marginTop: 2 }]}
+            >
+              Tap a photo below to set it as Before or After.
+            </Text>
+
+            {/* Side-by-side slots */}
+            <View
+              style={{
+                flexDirection: 'row',
+                gap: space.md,
+                marginTop: space.lg,
+              }}
+            >
+              {(['before', 'after'] as const).map((slot) => {
+                const photo =
+                  slot === 'before' ? compareBefore : compareAfter;
+                const setter =
+                  slot === 'before' ? setCompareBefore : setCompareAfter;
+                return (
+                  <View key={slot} style={{ flex: 1 }}>
+                    <Text
+                      style={[
+                        typo.caption2,
+                        {
+                          color: t.textTer,
+                          letterSpacing: 0.06,
+                          textTransform: 'uppercase',
+                          fontWeight: '700',
+                          marginBottom: space.xs,
+                        },
+                      ]}
+                    >
+                      {slot === 'before' ? 'Before' : 'After'}
+                    </Text>
+                    <Pressable
+                      onPress={() => setter(null)}
+                      style={{
+                        aspectRatio: 3 / 4,
+                        borderRadius: radius.md,
+                        overflow: 'hidden',
+                        backgroundColor: t.surface2,
+                      }}
+                    >
+                      {photo ? (
+                        <>
+                          <Image
+                            source={{ uri: photo.signedUrl }}
+                            style={{ width: '100%', height: '100%' }}
+                            resizeMode="cover"
+                          />
+                          <View
+                            style={{
+                              position: 'absolute',
+                              bottom: 4,
+                              left: 4,
+                              backgroundColor: 'rgba(0,0,0,0.5)',
+                              borderRadius: 4,
+                              paddingHorizontal: 4,
+                              paddingVertical: 2,
+                            }}
+                          >
+                            <Text
+                              style={[
+                                typo.caption2,
+                                { color: '#FFFFFF' },
+                              ]}
+                            >
+                              {formatPhotoDate(photo.taken_at)}
+                            </Text>
+                          </View>
+                        </>
+                      ) : (
+                        <View
+                          style={{
+                            flex: 1,
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                          }}
+                        >
+                          <Ionicons
+                            name="image-outline"
+                            size={32}
+                            color={t.textTer}
+                          />
+                        </View>
+                      )}
+                    </Pressable>
+                  </View>
+                );
+              })}
+            </View>
+
+            <Text
+              style={[
+                typo.caption2,
+                {
+                  color: t.textTer,
+                  letterSpacing: 0.06,
+                  textTransform: 'uppercase',
+                  fontWeight: '700',
+                  marginTop: space.xl,
+                  marginBottom: space.xs,
+                },
+              ]}
+            >
+              Pick photos
+            </Text>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={{ gap: space.sm }}
+            >
+              {photos.map((photo) => {
+                const isBefore = compareBefore?.id === photo.id;
+                const isAfter = compareAfter?.id === photo.id;
+                const sel = isBefore || isAfter;
+                return (
+                  <Pressable
+                    key={photo.id}
+                    onPress={() => {
+                      if (isBefore) {
+                        setCompareBefore(null);
+                        return;
+                      }
+                      if (isAfter) {
+                        setCompareAfter(null);
+                        return;
+                      }
+                      if (!compareBefore) setCompareBefore(photo);
+                      else setCompareAfter(photo);
+                    }}
+                    style={({ pressed }) => ({
+                      width: 80,
+                      aspectRatio: 3 / 4,
+                      borderRadius: radius.md,
+                      overflow: 'hidden',
+                      borderWidth: sel ? 2 : 0,
+                      borderColor: t.primary,
+                      opacity: pressed ? 0.6 : 1,
+                    })}
+                  >
+                    <Image
+                      source={{ uri: photo.signedUrl }}
+                      style={{ width: '100%', height: '100%' }}
+                      resizeMode="cover"
+                    />
+                    {sel && (
+                      <View
+                        style={{
+                          position: 'absolute',
+                          top: 4,
+                          right: 4,
+                          backgroundColor: t.primary,
+                          borderRadius: 999,
+                          width: 18,
+                          height: 18,
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                        }}
+                      >
+                        <Text
+                          style={[
+                            typo.caption2,
+                            { color: t.textOnPrim, fontWeight: '700' },
+                          ]}
+                        >
+                          {isBefore ? 'B' : 'A'}
+                        </Text>
+                      </View>
+                    )}
+                  </Pressable>
+                );
+              })}
+            </ScrollView>
+
+            <Pressable
+              onPress={() => setCompareOpen(false)}
+              style={({ pressed }) => ({
+                marginTop: space.xl,
+                height: 52,
+                borderRadius: radius.lg,
+                backgroundColor: t.primary,
+                alignItems: 'center',
+                justifyContent: 'center',
+                opacity: pressed ? 0.85 : 1,
+              })}
+            >
+              <Text style={[typo.headline, { color: t.textOnPrim }]}>
+                Done
+              </Text>
+            </Pressable>
+          </Pressable>
+        </Pressable>
+      </Modal>
 
       {/* Log measurement sheet */}
       <Modal

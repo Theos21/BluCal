@@ -197,3 +197,12 @@ export interface PushToken {
   created_at: string;
   updated_at: string;
 }
+
+export interface ProgressPhoto {
+  id: string;
+  user_id: string;
+  storage_path: string;
+  taken_at: string;
+  note: string | null;
+  created_at: string;
+}

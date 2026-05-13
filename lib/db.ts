@@ -8,6 +8,7 @@ import type {
   Measurement,
   PlannedMeal,
   Profile,
+  ProgressPhoto,
   Recipe,
   RecipeIngredient,
   WeightEntry,
@@ -653,4 +654,78 @@ export const addPlannedMeal = async (
 export const deletePlannedMeal = async (id: string): Promise<void> => {
   const { error } = await supabase.from('planned_meals').delete().eq('id', id);
   if (error) throw error;
+};
+
+// ── Progress photos ──────────────────────────────────────────────────────────
+// The `progress-photos` storage bucket is private (RLS-gated to the owner).
+// Reads require signed URLs, which we batch-mint here so the photo grid can
+// render with simple <Image source={{ uri: photo.signedUrl }} /> calls.
+export interface ProgressPhotoWithUrl extends ProgressPhoto {
+  signedUrl: string;
+}
+
+const SIGNED_URL_TTL_SECONDS = 3600;
+
+export const getProgressPhotos = async (
+  userId: string,
+): Promise<ProgressPhotoWithUrl[]> => {
+  const { data, error } = await supabase
+    .from('progress_photos')
+    .select('*')
+    .eq('user_id', userId)
+    .order('taken_at', { ascending: false });
+  if (error) throw error;
+  const photos = (data ?? []) as ProgressPhoto[];
+  if (photos.length === 0) return [];
+  const { data: signed, error: signErr } = await supabase.storage
+    .from('progress-photos')
+    .createSignedUrls(
+      photos.map((p) => p.storage_path),
+      SIGNED_URL_TTL_SECONDS,
+    );
+  if (signErr) throw signErr;
+  return photos.map((p, i) => ({
+    ...p,
+    signedUrl: signed?.[i]?.signedUrl ?? '',
+  }));
+};
+
+export const addProgressPhoto = async (
+  userId: string,
+  uri: string,
+  takenAt: string,
+): Promise<ProgressPhoto> => {
+  // RN's fetch().blob() works with supabase-js v2 for image uploads; the
+  // storage policy expects the path's first folder segment to equal the
+  // user id (see storage.foldername policy in schema.sql).
+  const response = await fetch(uri);
+  const blob = await response.blob();
+  const path = `${userId}/${Date.now()}.jpg`;
+
+  const { error: uploadError } = await supabase.storage
+    .from('progress-photos')
+    .upload(path, blob, { contentType: 'image/jpeg', upsert: false });
+  if (uploadError) throw uploadError;
+
+  const { data, error } = await supabase
+    .from('progress_photos')
+    .insert({ user_id: userId, storage_path: path, taken_at: takenAt })
+    .select()
+    .single();
+  if (error) throw error;
+  return data as ProgressPhoto;
+};
+
+export const deleteProgressPhoto = async (
+  photo: ProgressPhoto,
+): Promise<void> => {
+  // Delete the row first so a transient storage-delete failure can't leave
+  // a tile pointing at a missing object (which would surface as a broken
+  // image in the UI). Orphan storage objects are cheaper than orphan rows.
+  const { error } = await supabase
+    .from('progress_photos')
+    .delete()
+    .eq('id', photo.id);
+  if (error) throw error;
+  await supabase.storage.from('progress-photos').remove([photo.storage_path]);
 };

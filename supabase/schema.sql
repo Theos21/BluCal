@@ -249,3 +249,44 @@ alter table public.push_tokens enable row level security;
 
 create policy "users can manage own push tokens"
   on public.push_tokens for all using (auth.uid() = user_id);
+
+-- Progress photos
+create table if not exists public.progress_photos (
+  id uuid default gen_random_uuid() primary key,
+  user_id uuid references public.profiles(id) on delete cascade not null,
+  storage_path text not null,
+  taken_at timestamptz not null default now(),
+  note text,
+  created_at timestamptz default now()
+);
+
+alter table public.progress_photos enable row level security;
+
+create policy "users can manage own photos"
+  on public.progress_photos for all using (auth.uid() = user_id);
+
+-- Storage bucket for progress photos (private — accessed via signed URLs)
+insert into storage.buckets (id, name, public)
+values ('progress-photos', 'progress-photos', false)
+on conflict (id) do nothing;
+
+create policy "users can upload own photos"
+  on storage.objects for insert
+  with check (
+    bucket_id = 'progress-photos'
+    and auth.uid()::text = (storage.foldername(name))[1]
+  );
+
+create policy "users can view own photos"
+  on storage.objects for select
+  using (
+    bucket_id = 'progress-photos'
+    and auth.uid()::text = (storage.foldername(name))[1]
+  );
+
+create policy "users can delete own photos"
+  on storage.objects for delete
+  using (
+    bucket_id = 'progress-photos'
+    and auth.uid()::text = (storage.foldername(name))[1]
+  );

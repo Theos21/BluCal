@@ -78,13 +78,27 @@ export const signInWithGoogle = async (): Promise<void> => {
   const result = await WebBrowser.openAuthSessionAsync(data.url, redirectTo);
 
   if (result.type === 'success' && result.url) {
-    const { data: sessionData, error: sessionError } =
-      await supabase.auth.exchangeCodeForSession(result.url);
-    if (sessionError) throw sessionError;
-    if (!sessionData.session) throw new Error('No session returned');
+    // With implicit flow tokens come in URL fragment
+    const url = result.url;
+    const { error: sessionError } =
+      await supabase.auth.exchangeCodeForSession(url);
+    if (sessionError) {
+      // Try parsing fragment manually if exchangeCodeForSession fails
+      const fragment = url.split('#')[1] ?? url.split('?')[1] ?? '';
+      const params = new URLSearchParams(fragment);
+      const access_token = params.get('access_token');
+      const refresh_token = params.get('refresh_token');
+      if (access_token && refresh_token) {
+        const { error: setError } = await supabase.auth.setSession({
+          access_token,
+          refresh_token,
+        });
+        if (setError) throw setError;
+      } else {
+        throw sessionError;
+      }
+    }
   } else if (result.type === 'cancel' || result.type === 'dismiss') {
     return;
-  } else {
-    throw new Error('Google sign in failed');
   }
 };

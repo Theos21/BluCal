@@ -418,24 +418,22 @@ export const upsertProfile = async (
   userId: string,
   updates: Partial<Profile>,
 ): Promise<Profile> => {
-  // show_school is non-nullable in the DB but was added later without a
-  // backfill default for some environments. Include true as a fallback so
-  // upserts on rows where the column was set null don't fail; callers can
-  // still override via `updates`.
+  console.log('upsertProfile called with userId:', userId);
+  const payload = {
+    id: userId,
+    ...updates,
+    updated_at: new Date().toISOString(),
+  };
+  console.log('upsert payload:', JSON.stringify(payload));
   const { data, error } = await supabase
     .from('profiles')
-    .upsert(
-      {
-        id: userId,
-        show_school: true,
-        ...updates,
-        updated_at: new Date().toISOString(),
-      },
-      { onConflict: 'id' },
-    )
+    .upsert(payload, { onConflict: 'id' })
     .select()
     .single();
-  if (error) throw error;
+  if (error) {
+    console.error('Supabase upsert error:', JSON.stringify(error));
+    throw error;
+  }
   return data as Profile;
 };
 

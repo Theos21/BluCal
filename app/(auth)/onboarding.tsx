@@ -722,7 +722,7 @@ export default function Onboarding() {
       const ageNum = Number(age);
       const birthday =
         Number.isFinite(ageNum) && ageNum > 0 ? birthdayFromAge(ageNum) : null;
-      await upsertProfile(user.id, {
+      const profileData = {
         name,
         biological_sex: mapSexToDb(sex),
         birthday,
@@ -733,7 +733,31 @@ export default function Onboarding() {
         dietary_preferences: Array.from(diet),
         is_metric: isMetric,
         pace,
-      });
+      };
+      try {
+        console.log(
+          'Attempting upsert with:',
+          JSON.stringify(profileData),
+        );
+        await upsertProfile(user.id, profileData);
+        console.log('upsertProfile succeeded');
+      } catch (e) {
+        const supaError = e as {
+          message?: string;
+          code?: string;
+          details?: string;
+          hint?: string;
+        };
+        console.error(
+          'upsertProfile failed:',
+          JSON.stringify(e),
+          supaError.message,
+          supaError.code,
+          supaError.details,
+          supaError.hint,
+        );
+        throw e;
+      }
       if (Number.isFinite(weightKgValue) && weightKgValue > 0) {
         await addWeightEntry({
           user_id: user.id,

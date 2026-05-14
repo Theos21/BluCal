@@ -29,6 +29,7 @@ import { addFoodEntry } from '../lib/db';
 import { sessionState } from '../lib/sessionState';
 import {
   analyzeMealPhoto,
+  analyzeTextDescription,
   BluAIException,
   refineMealAnalysis,
   type BluAIFoodItem,
@@ -41,6 +42,8 @@ const OVERLAY_COLOR = 'rgba(0,0,0,0.55)';
 const CONTROL_BG = 'rgba(0,0,0,0.5)';
 const PILL_BG = 'rgba(0,0,0,0.3)';
 const SHUTTER_RING = 'rgba(255,255,255,0.4)';
+const TAB_BG = 'rgba(0,0,0,0.35)';
+const TAB_ACTIVE_BG = 'rgba(255,255,255,0.18)';
 
 const CONTROL_SIZE = 40;
 const SHUTTER_OUTER = 72;
@@ -61,7 +64,7 @@ type CapturedImage = {
 type Phase = 'camera' | 'analyzing' | 'results';
 
 // ── Small subcomponents ──────────────────────────────────────────────────────
-function BrandLabel() {
+function BrandLabel({ onLight = false }: { onLight?: boolean }) {
   const t = useTheme();
   return (
     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
@@ -75,7 +78,7 @@ function BrandLabel() {
       />
       <Text style={[typo.headline, { fontWeight: '600' }]}>
         <Text style={{ color: t.primary }}>Blu</Text>
-        <Text style={{ color: t.textOnPrim }}>AI</Text>
+        <Text style={{ color: onLight ? t.text : t.textOnPrim }}>AI</Text>
       </Text>
     </View>
   );
@@ -192,6 +195,8 @@ export default function BluAI() {
   const cameraRef = useRef<CameraView>(null);
 
   const [phase, setPhase] = useState<Phase>('camera');
+  const [mode, setMode] = useState<'camera' | 'text'>('camera');
+  const [textDescription, setTextDescription] = useState('');
   const [capturedImage, setCapturedImage] = useState<CapturedImage | null>(null);
   const [detectedItems, setDetectedItems] = useState<BluAIFoodItem[]>([]);
   const [followUpQuestions, setFollowUpQuestions] = useState<string[]>([]);
@@ -291,6 +296,36 @@ export default function BluAI() {
     setChipAnswers({});
     setActiveField(null);
     setDraftText('');
+    setTextDescription('');
+    setMode('camera');
+  };
+
+  const handleTextAnalysis = async () => {
+    const trimmed = textDescription.trim();
+    if (!trimmed) return;
+    setCapturedImage(null);
+    setPhase('analyzing');
+    try {
+      const result = await analyzeTextDescription(trimmed);
+      setDetectedItems(result.items);
+      setFollowUpQuestions(result.questions);
+      setCheckedIds(new Set(result.items.map((i) => i.id)));
+      setPhase('results');
+    } catch (e) {
+      console.error(e);
+      if (e instanceof BluAIException && e.code === 'not_authenticated') {
+        toast.show(e.message, 'error');
+        router.replace('/(auth)/signin');
+      } else {
+        toast.show(
+          e instanceof BluAIException
+            ? e.message
+            : 'Could not analyze description. Try again.',
+          'error',
+        );
+      }
+      setPhase('camera');
+    }
   };
 
   const handleClose = () => {
@@ -532,8 +567,10 @@ export default function BluAI() {
   return (
     <View style={{ flex: 1 }}>
       {/* Background layer */}
-      {phase === 'camera' ? (
+      {phase === 'camera' && mode === 'camera' ? (
         <CameraView ref={cameraRef} style={StyleSheet.absoluteFill} facing="back" />
+      ) : phase === 'camera' && mode === 'text' ? (
+        <View style={[StyleSheet.absoluteFill, { backgroundColor: t.bg }]} />
       ) : capturedImage ? (
         <Image
           source={{ uri: capturedImage.uri }}
@@ -574,7 +611,7 @@ export default function BluAI() {
         >
           <CircleControl icon="close" onPress={handleClose} />
           <View style={{ flex: 1, alignItems: 'center' }}>
-            <BrandLabel />
+            <BrandLabel onLight={phase === 'camera' && mode === 'text'} />
           </View>
           <View style={{ width: CONTROL_SIZE }} />
         </View>
@@ -583,75 +620,222 @@ export default function BluAI() {
       {/* ─── Camera state ─── */}
       {phase === 'camera' && (
         <>
-          {/* Instruction pill */}
+          {/* Tab switcher (camera vs text) */}
           <View
             style={{
               position: 'absolute',
-              left: 0,
-              right: 0,
-              bottom: insets.bottom + SHUTTER_OUTER + space.xxl,
-              alignItems: 'center',
-            }}
-          >
-            <View
-              style={{
-                paddingHorizontal: 14,
-                paddingVertical: 6,
-                borderRadius: 999,
-                backgroundColor: PILL_BG,
-              }}
-            >
-              <Text style={[typo.subhead, { color: t.textOnPrim }]}>
-                Point at your meal
-              </Text>
-            </View>
-          </View>
-
-          {/* Gallery picker (bottom-left) */}
-          <View
-            style={{
-              position: 'absolute',
-              bottom:
-                insets.bottom + (SHUTTER_OUTER - CONTROL_SIZE) / 2 + space.xl,
-              left: space.xl,
-            }}
-          >
-            <CircleControl icon="image-outline" onPress={handleGallery} />
-          </View>
-
-          {/* Shutter (bottom center) */}
-          <View
-            style={{
-              position: 'absolute',
-              left: 0,
-              right: 0,
-              bottom: insets.bottom + space.xl,
-              alignItems: 'center',
+              top: insets.top + space.sm + CONTROL_SIZE + space.sm,
+              left: space.lg,
+              right: space.lg,
+              flexDirection: 'row',
+              backgroundColor: mode === 'text' ? t.surface2 : TAB_BG,
+              borderRadius: radius.lg,
+              padding: 4,
             }}
           >
             <Pressable
-              onPress={handleShutter}
-              style={({ pressed }) => ({
-                width: SHUTTER_OUTER,
-                height: SHUTTER_OUTER,
-                borderRadius: SHUTTER_OUTER / 2,
-                borderWidth: 4,
-                borderColor: SHUTTER_RING,
+              onPress={() => setMode('camera')}
+              style={{
+                flex: 1,
+                paddingVertical: 8,
+                borderRadius: radius.md,
                 alignItems: 'center',
-                justifyContent: 'center',
-                opacity: pressed ? 0.8 : 1,
-              })}
+                backgroundColor:
+                  mode === 'camera' ? TAB_ACTIVE_BG : 'transparent',
+              }}
             >
-              <View
-                style={{
-                  width: SHUTTER_INNER,
-                  height: SHUTTER_INNER,
-                  borderRadius: SHUTTER_INNER / 2,
-                  backgroundColor: t.textOnPrim,
-                }}
-              />
+              <Text
+                style={[
+                  typo.subhead,
+                  {
+                    color: t.textOnPrim,
+                    fontWeight: mode === 'camera' ? '600' : '400',
+                    opacity: mode === 'camera' ? 1 : 0.7,
+                  },
+                ]}
+              >
+                Take photo
+              </Text>
+            </Pressable>
+            <Pressable
+              onPress={() => setMode('text')}
+              style={{
+                flex: 1,
+                paddingVertical: 8,
+                borderRadius: radius.md,
+                alignItems: 'center',
+                backgroundColor:
+                  mode === 'text' ? t.surface : 'transparent',
+              }}
+            >
+              <Text
+                style={[
+                  typo.subhead,
+                  {
+                    color: mode === 'text' ? t.text : t.textOnPrim,
+                    fontWeight: mode === 'text' ? '600' : '400',
+                    opacity: mode === 'text' ? 1 : 0.7,
+                  },
+                ]}
+              >
+                Describe meal
+              </Text>
             </Pressable>
           </View>
+
+          {mode === 'camera' && (
+            <>
+              {/* Instruction pill */}
+              <View
+                style={{
+                  position: 'absolute',
+                  left: 0,
+                  right: 0,
+                  bottom: insets.bottom + SHUTTER_OUTER + space.xxl,
+                  alignItems: 'center',
+                }}
+              >
+                <View
+                  style={{
+                    paddingHorizontal: 14,
+                    paddingVertical: 6,
+                    borderRadius: 999,
+                    backgroundColor: PILL_BG,
+                  }}
+                >
+                  <Text style={[typo.subhead, { color: t.textOnPrim }]}>
+                    Point at your meal
+                  </Text>
+                </View>
+              </View>
+
+              {/* Gallery picker (bottom-left) */}
+              <View
+                style={{
+                  position: 'absolute',
+                  bottom:
+                    insets.bottom +
+                    (SHUTTER_OUTER - CONTROL_SIZE) / 2 +
+                    space.xl,
+                  left: space.xl,
+                }}
+              >
+                <CircleControl icon="image-outline" onPress={handleGallery} />
+              </View>
+
+              {/* Shutter (bottom center) */}
+              <View
+                style={{
+                  position: 'absolute',
+                  left: 0,
+                  right: 0,
+                  bottom: insets.bottom + space.xl,
+                  alignItems: 'center',
+                }}
+              >
+                <Pressable
+                  onPress={handleShutter}
+                  style={({ pressed }) => ({
+                    width: SHUTTER_OUTER,
+                    height: SHUTTER_OUTER,
+                    borderRadius: SHUTTER_OUTER / 2,
+                    borderWidth: 4,
+                    borderColor: SHUTTER_RING,
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    opacity: pressed ? 0.8 : 1,
+                  })}
+                >
+                  <View
+                    style={{
+                      width: SHUTTER_INNER,
+                      height: SHUTTER_INNER,
+                      borderRadius: SHUTTER_INNER / 2,
+                      backgroundColor: t.textOnPrim,
+                    }}
+                  />
+                </Pressable>
+              </View>
+            </>
+          )}
+
+          {mode === 'text' && (
+            <View
+              style={{
+                position: 'absolute',
+                top:
+                  insets.top + space.sm + CONTROL_SIZE + space.sm + 48 + space.lg,
+                left: 0,
+                right: 0,
+                bottom: insets.bottom,
+                paddingHorizontal: space.lg,
+              }}
+            >
+              <Text style={[typo.title2, { color: t.text, marginBottom: space.sm }]}>
+                Describe your meal
+              </Text>
+              <Text
+                style={[
+                  typo.subhead,
+                  { color: t.textSec, marginBottom: space.lg },
+                ]}
+              >
+                Be specific for better accuracy. Include portions, cooking methods, and ingredients.
+              </Text>
+              <TextInput
+                style={{
+                  backgroundColor: t.surface2,
+                  borderRadius: radius.lg,
+                  padding: space.md,
+                  color: t.text,
+                  fontSize: 16,
+                  minHeight: 140,
+                  textAlignVertical: 'top',
+                }}
+                placeholder={
+                  'e.g. "Bagel with 2 tbsp cream cheese and smoked salmon, medium sized bagel"'
+                }
+                placeholderTextColor={t.textTer}
+                value={textDescription}
+                onChangeText={setTextDescription}
+                multiline
+              />
+              <Text
+                style={[
+                  typo.caption1,
+                  { color: t.textTer, marginTop: space.sm },
+                ]}
+              >
+                Tip: include portion sizes, brand names, and cooking methods
+              </Text>
+              <Pressable
+                onPress={handleTextAnalysis}
+                disabled={!textDescription.trim()}
+                style={({ pressed }) => ({
+                  backgroundColor: t.primary,
+                  borderRadius: radius.lg,
+                  height: 52,
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  marginTop: space.lg,
+                  opacity: !textDescription.trim()
+                    ? 0.4
+                    : pressed
+                      ? 0.85
+                      : 1,
+                })}
+              >
+                <Text
+                  style={[
+                    typo.subheadEm,
+                    { color: t.textOnPrim, fontWeight: '600' },
+                  ]}
+                >
+                  Analyze meal
+                </Text>
+              </Pressable>
+            </View>
+          )}
         </>
       )}
 

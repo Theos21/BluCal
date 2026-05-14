@@ -108,3 +108,9 @@ export const refineMealAnalysis = async (
     mode: 'refine',
   });
 };
+
+export const analyzeTextDescription = async (
+  description: string,
+): Promise<BluAIResult> => {
+  return invokeBluAI({ description, mode: 'text' });
+};

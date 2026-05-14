@@ -15,7 +15,7 @@ import {
   ExpoSpeechRecognitionModule,
   useSpeechRecognitionEvent,
 } from 'expo-speech-recognition';
-import { radius, space, type as typo, useTheme } from '../lib/theme';
+import { radius, space, type as typo, useTheme, type Theme } from '../lib/theme';
 import Toast from '../components/Toast';
 import { useToast } from '../lib/useToast';
 import { useAuth } from '../lib/AuthContext';
@@ -29,11 +29,76 @@ import { searchFoods, type FoodSearchResult } from '../lib/foodSearch';
 import { sessionState } from '../lib/sessionState';
 import type { FoodEntry } from '../lib/types';
 
-type FoodRow = {
+type RichRow = {
   id: string;
   name: string;
-  detail: string;
+  brand?: string | null;
+  hint?: string | null;
+  calories: number;
+  protein_g: number;
+  carbs_g: number;
+  fat_g: number;
   onAdd: () => void;
+};
+
+const formatFoodName = (name: string): string => {
+  if (!name) return '';
+  if (name === name.toUpperCase()) {
+    return name.toLowerCase().replace(/\b\w/g, (c) => c.toUpperCase());
+  }
+  return name.replace(/\b\w/g, (c) => c.toUpperCase());
+};
+
+const formatBrandName = (brand: string | null | undefined): string | null => {
+  if (!brand) return null;
+  const first = brand.split(',')[0].trim();
+  if (!first) return null;
+  if (first === first.toUpperCase()) {
+    return first.toLowerCase().replace(/\b\w/g, (c) => c.toUpperCase());
+  }
+  return first.replace(/\b\w/g, (c) => c.toUpperCase());
+};
+
+type FoodIconKind = 'protein' | 'fat' | 'carb' | 'default';
+
+const getFoodIconKind = (
+  cal: number,
+  p: number,
+  c: number,
+  f: number,
+): FoodIconKind => {
+  if (p > 15 && p * 4 > cal * 0.3) return 'protein';
+  if (f > 15 || cal > 400) return 'fat';
+  if (c > 30) return 'carb';
+  return 'default';
+};
+
+const getFoodIcon = (
+  kind: FoodIconKind,
+  t: Theme,
+): {
+  name: keyof typeof Ionicons.glyphMap;
+  color: string;
+  bg: string;
+} => {
+  switch (kind) {
+    case 'protein':
+      return {
+        name: 'barbell-outline',
+        color: t.primary,
+        bg: t.primarySoft,
+      };
+    case 'fat':
+      return { name: 'flame-outline', color: t.warn, bg: t.warnSoft };
+    case 'carb':
+      return { name: 'leaf-outline', color: t.teal, bg: t.tealSoft };
+    default:
+      return {
+        name: 'nutrition-outline',
+        color: t.primary,
+        bg: t.primarySoft,
+      };
+  }
 };
 
 function Header() {
@@ -206,43 +271,164 @@ function SectionLabel({ label }: { label: string }) {
   );
 }
 
-function FoodRowItem({
+function RichFoodRowItem({
   row,
   showDivider,
 }: {
-  row: FoodRow;
+  row: RichRow;
   showDivider: boolean;
 }) {
   const t = useTheme();
+  const displayName = formatFoodName(row.name);
+  const displayBrand = formatBrandName(row.brand ?? null);
+
+  const cleanName =
+    displayBrand &&
+    displayName.toLowerCase().startsWith(displayBrand.toLowerCase())
+      ? displayName.slice(displayBrand.length).trim()
+      : displayName;
+  const finalName = cleanName || displayName;
+
+  const subtitle = displayBrand ?? row.hint ?? null;
+
+  const iconKind = getFoodIconKind(
+    row.calories,
+    Number(row.protein_g),
+    Number(row.carbs_g),
+    Number(row.fat_g),
+  );
+  const icon = getFoodIcon(iconKind, t);
+
   return (
     <View>
-      <View
-        style={{
+      <Pressable
+        onPress={row.onAdd}
+        style={({ pressed }) => ({
           flexDirection: 'row',
           alignItems: 'center',
           paddingVertical: 12,
           gap: 12,
-        }}
+          backgroundColor: pressed ? t.surface2 : 'transparent',
+        })}
       >
-        <View style={{ flex: 1, minWidth: 0 }}>
-          <Text style={[typo.subhead, { color: t.text }]} numberOfLines={1}>
-            {row.name}
-          </Text>
+        <View
+          style={{
+            width: 46,
+            height: 46,
+            borderRadius: 14,
+            backgroundColor: icon.bg,
+            alignItems: 'center',
+            justifyContent: 'center',
+            flexShrink: 0,
+          }}
+        >
+          <Ionicons name={icon.name} size={22} color={icon.color} />
+        </View>
+
+        <View style={{ flex: 1, gap: 2, minWidth: 0 }}>
           <Text
-            style={[typo.caption1, { color: t.textTer, marginTop: 2 }]}
+            style={[typo.subhead, { color: t.text, fontWeight: '600' }]}
             numberOfLines={1}
           >
-            {row.detail}
+            {finalName}
           </Text>
+          {subtitle && (
+            <Text
+              style={[
+                typo.caption1,
+                { color: t.textSec, fontWeight: '500' },
+              ]}
+              numberOfLines={1}
+            >
+              {subtitle}
+            </Text>
+          )}
+          <View style={{ flexDirection: 'row', gap: 6, marginTop: 2 }}>
+            <View
+              style={{
+                backgroundColor: t.surface2,
+                borderRadius: 6,
+                paddingHorizontal: 6,
+                paddingVertical: 2,
+              }}
+            >
+              <Text
+                style={[
+                  typo.caption2,
+                  { color: t.textSec, fontWeight: '600' },
+                ]}
+              >
+                {row.calories} cal
+              </Text>
+            </View>
+            <View
+              style={{
+                backgroundColor: t.primarySoft,
+                borderRadius: 6,
+                paddingHorizontal: 6,
+                paddingVertical: 2,
+              }}
+            >
+              <Text
+                style={[
+                  typo.caption2,
+                  { color: t.primary, fontWeight: '600' },
+                ]}
+              >
+                {Math.round(Number(row.protein_g))}g P
+              </Text>
+            </View>
+            <View
+              style={{
+                backgroundColor: t.warnSoft,
+                borderRadius: 6,
+                paddingHorizontal: 6,
+                paddingVertical: 2,
+              }}
+            >
+              <Text
+                style={[
+                  typo.caption2,
+                  { color: t.warn, fontWeight: '600' },
+                ]}
+              >
+                {Math.round(Number(row.carbs_g))}g C
+              </Text>
+            </View>
+            <View
+              style={{
+                backgroundColor: t.tealSoft,
+                borderRadius: 6,
+                paddingHorizontal: 6,
+                paddingVertical: 2,
+              }}
+            >
+              <Text
+                style={[
+                  typo.caption2,
+                  { color: t.teal, fontWeight: '600' },
+                ]}
+              >
+                {Math.round(Number(row.fat_g))}g F
+              </Text>
+            </View>
+          </View>
         </View>
-        <Pressable
-          onPress={row.onAdd}
-          hitSlop={6}
-          style={({ pressed }) => ({ opacity: pressed ? 0.6 : 1 })}
+
+        <View
+          style={{
+            width: 34,
+            height: 34,
+            borderRadius: 17,
+            backgroundColor: t.primary,
+            alignItems: 'center',
+            justifyContent: 'center',
+            flexShrink: 0,
+          }}
         >
-          <Ionicons name="add-circle-outline" size={26} color={t.primary} />
-        </Pressable>
-      </View>
+          <Ionicons name="add" size={22} color={t.textOnPrim} />
+        </View>
+      </Pressable>
       {showDivider && (
         <View style={{ height: 0.5, backgroundColor: t.hairline }} />
       )}
@@ -256,7 +442,7 @@ function Section({
   emptyState,
 }: {
   label: string;
-  rows: FoodRow[];
+  rows: RichRow[];
   emptyState?: React.ReactNode;
 }) {
   return (
@@ -266,7 +452,7 @@ function Section({
         {rows.length === 0 && emptyState
           ? emptyState
           : rows.map((row, i) => (
-              <FoodRowItem
+              <RichFoodRowItem
                 key={row.id}
                 row={row}
                 showDivider={i < rows.length - 1}
@@ -317,53 +503,6 @@ function RecipesEmptyState() {
   );
 }
 
-function SearchResultItem({
-  result,
-  onSelect,
-}: {
-  result: FoodSearchResult;
-  onSelect: () => void;
-}) {
-  const t = useTheme();
-  return (
-    <View
-      style={{
-        flexDirection: 'row',
-        alignItems: 'center',
-        paddingVertical: 12,
-        gap: 12,
-      }}
-    >
-      <View style={{ flex: 1, minWidth: 0 }}>
-        <Text style={[typo.subhead, { color: t.text }]} numberOfLines={1}>
-          {result.name}
-        </Text>
-        {result.brand && (
-          <Text
-            style={[typo.caption1, { color: t.textSec, marginTop: 2 }]}
-            numberOfLines={1}
-          >
-            {result.brand}
-          </Text>
-        )}
-        <Text
-          style={[typo.caption1, { color: t.textTer, marginTop: 2 }]}
-          numberOfLines={1}
-        >
-          {`${result.calories} kcal · ${result.protein_g}p · ${result.carbs_g}c · ${result.fat_g}f`}
-        </Text>
-      </View>
-      <Pressable
-        onPress={onSelect}
-        hitSlop={6}
-        style={({ pressed }) => ({ opacity: pressed ? 0.6 : 1 })}
-      >
-        <Ionicons name="add-circle-outline" size={26} color={t.primary} />
-      </Pressable>
-    </View>
-  );
-}
-
 function SearchResultsList({
   results,
   onSelect,
@@ -371,18 +510,26 @@ function SearchResultsList({
   results: FoodSearchResult[];
   onSelect: (r: FoodSearchResult) => void;
 }) {
-  const t = useTheme();
+  const rows: RichRow[] = results.map((r) => ({
+    id: r.id,
+    name: r.name,
+    brand: r.brand,
+    calories: r.calories,
+    protein_g: r.protein_g,
+    carbs_g: r.carbs_g,
+    fat_g: r.fat_g,
+    onAdd: () => onSelect(r),
+  }));
   return (
     <View style={{ paddingHorizontal: space.lg, marginTop: space.xl }}>
       <SectionLabel label="Search results" />
       <View style={{ marginTop: space.xs }}>
-        {results.map((r, i) => (
-          <View key={r.id}>
-            <SearchResultItem result={r} onSelect={() => onSelect(r)} />
-            {i < results.length - 1 && (
-              <View style={{ height: 0.5, backgroundColor: t.hairline }} />
-            )}
-          </View>
+        {rows.map((row, i) => (
+          <RichFoodRowItem
+            key={row.id}
+            row={row}
+            showDivider={i < rows.length - 1}
+          />
         ))}
       </View>
     </View>
@@ -593,10 +740,13 @@ export default function LogFood() {
     }
   };
 
-  const recentRows: FoodRow[] = recentFoods.map((entry) => ({
+  const recentRows: RichRow[] = recentFoods.map((entry) => ({
     id: entry.id,
     name: entry.name,
-    detail: `${entry.calories} kcal · ${Math.round(Number(entry.protein_g))}p · ${Math.round(Number(entry.carbs_g))}c · ${Math.round(Number(entry.fat_g))}f`,
+    calories: entry.calories,
+    protein_g: Number(entry.protein_g),
+    carbs_g: Number(entry.carbs_g),
+    fat_g: Number(entry.fat_g),
     onAdd: () => void handleReLog(entry),
   }));
 
@@ -631,10 +781,14 @@ export default function LogFood() {
     }
   };
 
-  const recipeRows: FoodRow[] = myRecipes.map((recipe) => ({
+  const recipeRows: RichRow[] = myRecipes.map((recipe) => ({
     id: recipe.id,
     name: recipe.name,
-    detail: `${recipe.perServing.calories} kcal · ${recipe.perServing.protein_g}p · ${recipe.perServing.carbs_g}c · ${recipe.perServing.fat_g}f per serving`,
+    hint: 'Per serving',
+    calories: recipe.perServing.calories,
+    protein_g: Number(recipe.perServing.protein_g),
+    carbs_g: Number(recipe.perServing.carbs_g),
+    fat_g: Number(recipe.perServing.fat_g),
     onAdd: () => void handleLogRecipe(recipe),
   }));
 

@@ -19,10 +19,7 @@
       "bundleIdentifier": "com.blucal.app",
       "usesAppleSignIn": true,
       "entitlements": {
-        "com.apple.developer.applesignin": [
-          "Default",
-          "Default"
-        ]
+        "com.apple.developer.applesignin": ["Default"]
       },
       "infoPlist": {
         "NSCameraUsageDescription": "BluCal uses your camera to scan food barcodes and analyze meals with BluAI.",

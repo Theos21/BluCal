@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import {
+  ActivityIndicator,
   Alert,
   Linking,
   Modal,
@@ -7,6 +8,7 @@ import {
   ScrollView,
   Switch,
   Text,
+  TextInput,
   View,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -17,6 +19,7 @@ import { radius, space, type as typo, useTheme } from '../../lib/theme';
 import { signOut } from '../../lib/auth';
 import { useAuth } from '../../lib/AuthContext';
 import { calculateMomentumScore, getStreak, updateProfile } from '../../lib/db';
+import { supabase } from '../../lib/supabase';
 import { isAvailable, requestPermissions } from '../../lib/appleHealth';
 import {
   cancelAllNotifications,
@@ -591,6 +594,7 @@ function MomentumBanner({
 // ── Screen ───────────────────────────────────────────────────────────────────
 export default function Profile() {
   const t = useTheme();
+  const insets = useSafeAreaInsets();
   const toast = useToast();
   const { user, profile, refreshProfile } = useAuth();
 
@@ -619,6 +623,51 @@ export default function Profile() {
   const [weighInHour, setWeighInHour] = useState(
     profile?.notif_weigh_in_hour ?? 7,
   );
+  const [pwdSheetOpen, setPwdSheetOpen] = useState(false);
+  const [newPwd, setNewPwd] = useState('');
+  const [confirmPwd, setConfirmPwd] = useState('');
+  const [showPwd, setShowPwd] = useState(false);
+  const [savingPwd, setSavingPwd] = useState(false);
+  const [pwdError, setPwdError] = useState<string | null>(null);
+
+  const provider = user?.app_metadata?.provider;
+  const isSocialUser = provider === 'apple' || provider === 'google';
+
+  const handleAddPassword = async () => {
+    setPwdError(null);
+    if (newPwd.length < 6) {
+      setPwdError('Password must be at least 6 characters.');
+      return;
+    }
+    if (newPwd !== confirmPwd) {
+      setPwdError('Passwords do not match.');
+      return;
+    }
+    setSavingPwd(true);
+    try {
+      const { error } = await supabase.auth.updateUser({ password: newPwd });
+      if (error) throw error;
+      toast.show('Password added to your account', 'success');
+      setPwdSheetOpen(false);
+      setNewPwd('');
+      setConfirmPwd('');
+      setShowPwd(false);
+    } catch (e) {
+      const message =
+        e instanceof Error ? e.message : 'Could not set password.';
+      setPwdError(message);
+    } finally {
+      setSavingPwd(false);
+    }
+  };
+
+  const handleClosePwdSheet = () => {
+    setPwdSheetOpen(false);
+    setNewPwd('');
+    setConfirmPwd('');
+    setShowPwd(false);
+    setPwdError(null);
+  };
 
   // Sync toggles whenever the profile's notification fields change (e.g.,
   // after sign-in or a refresh from another device).
@@ -865,6 +914,13 @@ export default function Profile() {
             value={formatHeight(profile?.height_cm, isMetric)}
             onPress={() => router.push('/edit-profile')}
           />
+          {isSocialUser && (
+            <SettingsRow
+              icon="key-outline"
+              label="Add password"
+              onPress={() => setPwdSheetOpen(true)}
+            />
+          )}
           <SettingsRow
             label="Units"
             value={isMetric ? 'Metric' : 'Imperial'}
@@ -1055,6 +1111,183 @@ export default function Profile() {
         onClose={() => setTimePickerOpen(null)}
         onSave={handleSaveWeighInTime}
       />
+
+      <Modal
+        visible={pwdSheetOpen}
+        transparent
+        animationType="slide"
+        onRequestClose={handleClosePwdSheet}
+      >
+        <Pressable
+          onPress={handleClosePwdSheet}
+          style={{
+            flex: 1,
+            backgroundColor: t.scrim,
+            justifyContent: 'flex-end',
+          }}
+        >
+          <Pressable
+            onPress={(e) => e.stopPropagation()}
+            style={{
+              backgroundColor: t.surface,
+              borderTopLeftRadius: radius.xl,
+              borderTopRightRadius: radius.xl,
+              paddingHorizontal: space.xl,
+              paddingTop: space.lg,
+              paddingBottom: insets.bottom + space.xl,
+            }}
+          >
+            <View style={{ alignItems: 'center' }}>
+              <View
+                style={{
+                  width: 36,
+                  height: 4,
+                  borderRadius: radius.pill,
+                  backgroundColor: t.surface3,
+                }}
+              />
+            </View>
+            <Text
+              style={[
+                typo.title3,
+                { color: t.text, textAlign: 'center', marginTop: space.lg },
+              ]}
+            >
+              Add password
+            </Text>
+            <Text
+              style={[
+                typo.subhead,
+                {
+                  color: t.textSec,
+                  textAlign: 'center',
+                  marginTop: space.xs,
+                },
+              ]}
+            >
+              Set a password so you can also sign in with email.
+            </Text>
+
+            <View style={{ marginTop: space.xl, gap: space.md }}>
+              <View
+                style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  backgroundColor: t.surface2,
+                  borderRadius: radius.md,
+                  paddingHorizontal: 14,
+                }}
+              >
+                <TextInput
+                  value={newPwd}
+                  onChangeText={setNewPwd}
+                  placeholder="New password"
+                  placeholderTextColor={t.textTer}
+                  secureTextEntry={!showPwd}
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  textContentType="newPassword"
+                  style={[
+                    typo.body,
+                    { flex: 1, color: t.text, paddingVertical: 12 },
+                  ]}
+                />
+                <Pressable
+                  hitSlop={8}
+                  onPress={() => setShowPwd((v) => !v)}
+                  style={({ pressed }) => ({
+                    padding: 4,
+                    opacity: pressed ? 0.6 : 1,
+                  })}
+                >
+                  <Ionicons
+                    name={showPwd ? 'eye-off-outline' : 'eye-outline'}
+                    size={20}
+                    color={t.textSec}
+                  />
+                </Pressable>
+              </View>
+              <View
+                style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  backgroundColor: t.surface2,
+                  borderRadius: radius.md,
+                  paddingHorizontal: 14,
+                }}
+              >
+                <TextInput
+                  value={confirmPwd}
+                  onChangeText={setConfirmPwd}
+                  placeholder="Confirm password"
+                  placeholderTextColor={t.textTer}
+                  secureTextEntry={!showPwd}
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  textContentType="newPassword"
+                  style={[
+                    typo.body,
+                    { flex: 1, color: t.text, paddingVertical: 12 },
+                  ]}
+                />
+              </View>
+            </View>
+
+            {pwdError && (
+              <Text
+                style={[
+                  typo.footnote,
+                  {
+                    color: t.danger,
+                    marginTop: space.md,
+                    textAlign: 'center',
+                  },
+                ]}
+              >
+                {pwdError}
+              </Text>
+            )}
+
+            <Pressable
+              onPress={handleAddPassword}
+              disabled={savingPwd || !newPwd || !confirmPwd}
+              style={({ pressed }) => ({
+                marginTop: space.xl,
+                height: 52,
+                borderRadius: radius.lg,
+                backgroundColor: t.primary,
+                alignItems: 'center',
+                justifyContent: 'center',
+                opacity:
+                  savingPwd || !newPwd || !confirmPwd
+                    ? 0.4
+                    : pressed
+                      ? 0.85
+                      : 1,
+              })}
+            >
+              {savingPwd ? (
+                <ActivityIndicator color={t.textOnPrim} />
+              ) : (
+                <Text style={[typo.headline, { color: t.textOnPrim }]}>
+                  Save
+                </Text>
+              )}
+            </Pressable>
+            <Pressable
+              hitSlop={6}
+              onPress={handleClosePwdSheet}
+              style={({ pressed }) => ({
+                alignSelf: 'center',
+                marginTop: space.md,
+                opacity: pressed ? 0.6 : 1,
+              })}
+            >
+              <Text style={[typo.subhead, { color: t.textSec }]}>Cancel</Text>
+            </Pressable>
+          </Pressable>
+        </Pressable>
+      </Modal>
 
       <Toast
         message={toast.message}

@@ -58,18 +58,25 @@ class ErrorBoundary extends React.Component<
 function RootNavigator() {
   const t = useTheme();
   const router = useRouter();
-  const { session, loading } = useAuth();
+  const { session, profile, loading } = useAuth();
 
   useEffect(() => {
     if (loading) return;
     setTimeout(() => {
-      if (session) {
-        router.replace('/(tabs)');
-      } else {
+      if (!session) {
         router.replace('/(auth)/welcome');
+        return;
+      }
+      // New social-auth users get a profile row (via the new-user trigger)
+      // but no onboarding data — route them to onboarding until `goal` is
+      // set. Email/password signup already routes via that flow itself.
+      if (profile && !profile.goal) {
+        router.replace('/(auth)/onboarding');
+      } else {
+        router.replace('/(tabs)');
       }
     }, 0);
-  }, [session, loading]);
+  }, [session, profile, loading]);
 
   if (loading) {
     // theme context may not be ready on cold boot, so the spinner uses

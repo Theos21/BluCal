@@ -18,6 +18,9 @@ expo-env.d.ts
 *.key
 *.mobileprovision
 
+# Apple Sign In JWT — short-lived secret, mint via scripts/generate-apple-jwt.js
+scripts/apple-jwt.txt
+
 # Metro
 .metro-health-check*
 

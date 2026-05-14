@@ -17,6 +17,10 @@
       "buildNumber": "4",
       "supportsTablet": false,
       "bundleIdentifier": "com.blucal.app",
+      "usesAppleSignIn": true,
+      "entitlements": {
+        "com.apple.developer.applesignin": ["Default"]
+      },
       "infoPlist": {
         "NSCameraUsageDescription": "BluCal uses your camera to scan food barcodes and analyze meals with BluAI.",
         "NSPhotoLibraryUsageDescription": "BluCal accesses your photos so you can upload a meal photo to BluAI.",
@@ -57,6 +61,13 @@
         {
           "microphonePermission": "BluCal uses your microphone to let you log food by voice.",
           "speechRecognitionPermission": "BluCal uses speech recognition to convert your voice into food searches."
+        }
+      ],
+      "expo-apple-authentication",
+      [
+        "@react-native-google-signin/google-signin",
+        {
+          "iosUrlScheme": "com.googleusercontent.apps.33755275712-9i38v9q8urpqn7mem2u0613ikummocf9"
         }
       ]
     ]

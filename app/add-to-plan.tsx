@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   KeyboardAvoidingView,
@@ -30,6 +30,7 @@ import {
   getRecipesWithMacros,
   type RecipeWithMacros,
 } from '../lib/db';
+import { searchFoods, type FoodSearchResult } from '../lib/foodSearch';
 
 // "HH:MM" in 24h for DB storage; display via formatTime.
 const PRESET_TIMES = [
@@ -157,6 +158,50 @@ export default function AddToPlan() {
   const [recipesLoading, setRecipesLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchResults, setSearchResults] = useState<FoodSearchResult[]>([]);
+  const [searching, setSearching] = useState(false);
+  const searchTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (searchTimeout.current) clearTimeout(searchTimeout.current);
+    };
+  }, []);
+
+  const handleSearch = (text: string) => {
+    setSearchQuery(text);
+    if (searchTimeout.current) clearTimeout(searchTimeout.current);
+    if (!text.trim()) {
+      setSearchResults([]);
+      setSearching(false);
+      return;
+    }
+    searchTimeout.current = setTimeout(async () => {
+      try {
+        setSearching(true);
+        const results = await searchFoods(text);
+        setSearchResults(results);
+      } catch (e) {
+        console.error(e);
+      } finally {
+        setSearching(false);
+      }
+    }, 500);
+  };
+
+  const handleSelectFood = (food: FoodSearchResult) => {
+    setMealName(food.name);
+    setCal(String(food.calories));
+    setProtein(String(Math.round(food.protein_g)));
+    setCarbs(String(Math.round(food.carbs_g)));
+    setFat(String(Math.round(food.fat_g)));
+    setPortion(`${food.serving_size}${food.serving_unit}`);
+    setSelectedRecipe(null);
+    setSearchResults([]);
+    setSearchQuery('');
+  };
+
   useEffect(() => {
     if (!user) {
       setRecipesLoading(false);
@@ -283,11 +328,202 @@ export default function AddToPlan() {
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
         >
-          {/* Meal name */}
+          {/* Food search */}
           <View
             style={{
               marginHorizontal: space.lg,
               marginTop: space.xl,
+              backgroundColor: t.surface2,
+              borderRadius: radius.lg,
+              paddingHorizontal: 14,
+              paddingVertical: 10,
+              flexDirection: 'row',
+              alignItems: 'center',
+              gap: 10,
+            }}
+          >
+            <Ionicons name="search-outline" size={18} color={t.textTer} />
+            <TextInput
+              value={searchQuery}
+              onChangeText={handleSearch}
+              placeholder="Search food database"
+              placeholderTextColor={t.textTer}
+              autoCorrect={false}
+              autoCapitalize="none"
+              returnKeyType="search"
+              style={[typo.body, { flex: 1, color: t.text, padding: 0 }]}
+            />
+            {searching && <ActivityIndicator color={t.primary} size="small" />}
+          </View>
+
+          {searchResults.length > 0 && (
+            <View
+              style={{
+                marginHorizontal: space.lg,
+                marginTop: space.sm,
+                backgroundColor: t.surface,
+                borderRadius: radius.lg,
+                borderWidth: 1,
+                borderColor: t.hairline,
+                overflow: 'hidden',
+              }}
+            >
+              {searchResults.slice(0, 8).map((r, i) => {
+                const isLast = i === Math.min(searchResults.length, 8) - 1;
+                return (
+                  <View key={r.id}>
+                    <Pressable
+                      onPress={() => handleSelectFood(r)}
+                      style={({ pressed }) => ({
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        paddingHorizontal: space.lg,
+                        paddingVertical: 12,
+                        gap: 12,
+                        backgroundColor: pressed ? t.surface2 : 'transparent',
+                      })}
+                    >
+                      <View
+                        style={{
+                          width: 40,
+                          height: 40,
+                          borderRadius: 12,
+                          backgroundColor: t.primarySoft,
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          flexShrink: 0,
+                        }}
+                      >
+                        <Ionicons
+                          name="nutrition-outline"
+                          size={20}
+                          color={t.primary}
+                        />
+                      </View>
+                      <View style={{ flex: 1, minWidth: 0 }}>
+                        <Text
+                          style={[
+                            typo.subhead,
+                            { color: t.text, fontWeight: '600' },
+                          ]}
+                          numberOfLines={1}
+                        >
+                          {r.name}
+                        </Text>
+                        {r.brand && (
+                          <Text
+                            style={[
+                              typo.caption1,
+                              { color: t.textSec, marginTop: 2 },
+                            ]}
+                            numberOfLines={1}
+                          >
+                            {r.brand}
+                          </Text>
+                        )}
+                        <View
+                          style={{
+                            flexDirection: 'row',
+                            gap: 6,
+                            marginTop: 4,
+                          }}
+                        >
+                          <View
+                            style={{
+                              backgroundColor: t.surface2,
+                              borderRadius: 6,
+                              paddingHorizontal: 6,
+                              paddingVertical: 2,
+                            }}
+                          >
+                            <Text
+                              style={[
+                                typo.caption2,
+                                { color: t.textSec, fontWeight: '600' },
+                              ]}
+                            >
+                              {r.calories} cal
+                            </Text>
+                          </View>
+                          <View
+                            style={{
+                              backgroundColor: t.primarySoft,
+                              borderRadius: 6,
+                              paddingHorizontal: 6,
+                              paddingVertical: 2,
+                            }}
+                          >
+                            <Text
+                              style={[
+                                typo.caption2,
+                                { color: t.primary, fontWeight: '600' },
+                              ]}
+                            >
+                              {Math.round(Number(r.protein_g))}g P
+                            </Text>
+                          </View>
+                          <View
+                            style={{
+                              backgroundColor: t.warnSoft,
+                              borderRadius: 6,
+                              paddingHorizontal: 6,
+                              paddingVertical: 2,
+                            }}
+                          >
+                            <Text
+                              style={[
+                                typo.caption2,
+                                { color: t.warn, fontWeight: '600' },
+                              ]}
+                            >
+                              {Math.round(Number(r.carbs_g))}g C
+                            </Text>
+                          </View>
+                          <View
+                            style={{
+                              backgroundColor: t.tealSoft,
+                              borderRadius: 6,
+                              paddingHorizontal: 6,
+                              paddingVertical: 2,
+                            }}
+                          >
+                            <Text
+                              style={[
+                                typo.caption2,
+                                { color: t.teal, fontWeight: '600' },
+                              ]}
+                            >
+                              {Math.round(Number(r.fat_g))}g F
+                            </Text>
+                          </View>
+                        </View>
+                      </View>
+                      <Ionicons
+                        name="chevron-forward"
+                        size={16}
+                        color={t.textTer}
+                      />
+                    </Pressable>
+                    {!isLast && (
+                      <View
+                        style={{
+                          height: 0.5,
+                          backgroundColor: t.hairline,
+                          marginLeft: 12 + 40 + 12,
+                        }}
+                      />
+                    )}
+                  </View>
+                );
+              })}
+            </View>
+          )}
+
+          {/* Meal name */}
+          <View
+            style={{
+              marginHorizontal: space.lg,
+              marginTop: space.md,
             }}
           >
             <TextInput

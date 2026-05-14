@@ -44,27 +44,35 @@ function ProgressBar({
   );
 }
 
-function MiniMacro({ row }: { row: MacroRow }) {
+function MacroBarRow({ row }: { row: MacroRow }) {
   const t = useTheme();
   return (
-    <View style={{ flex: 1 }}>
+    <View>
       <View
         style={{
           flexDirection: 'row',
           justifyContent: 'space-between',
           alignItems: 'baseline',
-          marginBottom: space.xs,
+          marginBottom: 6,
         }}
       >
         <Text style={[typo.subheadEm, { color: t.text }]}>{row.label}</Text>
         <Text style={[typo.caption1, { color: t.textSec }]}>
-          <Text style={{ color: t.text, fontWeight: '700' }}>{row.cur}</Text>
+          <Text
+            style={{
+              color: t.text,
+              fontWeight: '700',
+              fontVariant: ['tabular-nums'],
+            }}
+          >
+            {row.cur}g
+          </Text>
           {` / ${row.target}g`}
         </Text>
       </View>
       <ProgressBar
         pct={row.cur / row.target}
-        height={4}
+        height={8}
         track={t.surface2}
         fill={row.color}
       />
@@ -80,8 +88,9 @@ export default function MacroSummaryCard({
   fat,
 }: Props) {
   const t = useTheme();
-  const remaining = Math.max(0, target - consumed);
-  const pct = consumed / target;
+  const over = consumed > target;
+  const remaining = Math.abs(target - consumed);
+  const pct = target > 0 ? consumed / target : 0;
 
   return (
     <View
@@ -93,78 +102,68 @@ export default function MacroSummaryCard({
         borderColor: t.separator,
       }}
     >
+      <Text
+        style={[
+          typo.caption2,
+          {
+            color: t.textTer,
+            letterSpacing: 0.8,
+            textTransform: 'uppercase',
+            fontWeight: '700',
+          },
+        ]}
+      >
+        Calories
+      </Text>
+
       <View
         style={{
           flexDirection: 'row',
-          alignItems: 'flex-start',
+          alignItems: 'flex-end',
           justifyContent: 'space-between',
+          marginTop: space.xs,
         }}
       >
         <View>
           <Text
-            style={[
-              typo.caption2,
-              {
-                color: t.textTer,
-                letterSpacing: 0.8,
-                textTransform: 'uppercase',
-                fontWeight: '700',
-              },
-            ]}
-          >
-            Calories
-          </Text>
-          <View
             style={{
-              flexDirection: 'row',
-              alignItems: 'baseline',
-              marginTop: space.xs,
+              fontSize: 52,
+              lineHeight: 56,
+              fontWeight: '800',
+              color: t.text,
+              letterSpacing: -2,
+              fontVariant: ['tabular-nums'],
             }}
           >
-            <Text
-              style={[
-                typo.title1,
-                { color: t.text, fontVariant: ['tabular-nums'] },
-              ]}
-            >
-              {consumed.toLocaleString()}
-            </Text>
-            <Text style={[typo.body, { color: t.textSec, marginLeft: space.xs }]}>
-              {`/ ${target.toLocaleString()}`}
-            </Text>
-          </View>
-        </View>
-        <View style={{ alignItems: 'flex-end' }}>
-          <Text
-            style={[
-              typo.caption2,
-              {
-                color: t.textTer,
-                letterSpacing: 0.8,
-                textTransform: 'uppercase',
-                fontWeight: '700',
-              },
-            ]}
-          >
-            Remaining
+            {consumed.toLocaleString()}
           </Text>
-          <Text
-            style={[
-              typo.title3,
-              {
-                color: t.textSec,
-                marginTop: space.xs,
-                fontVariant: ['tabular-nums'],
-              },
-            ]}
-          >
-            {remaining.toLocaleString()}
+          <Text style={[typo.subhead, { color: t.textSec, marginTop: 2 }]}>
+            {`of ${target.toLocaleString()} kcal`}
           </Text>
         </View>
+        <Text
+          style={[
+            typo.title3,
+            {
+              color: over ? t.danger : t.success,
+              fontWeight: '700',
+              fontVariant: ['tabular-nums'],
+              textAlign: 'right',
+              maxWidth: 140,
+            },
+          ]}
+        >
+          {`${remaining.toLocaleString()} ${over ? 'over' : 'remaining'}`}
+        </Text>
       </View>
 
       <View style={{ marginTop: space.md }}>
-        <ProgressBar pct={pct} height={6} track={t.surface2} fill={t.primary} />
+        <ProgressBar
+          pct={pct}
+          height={8}
+          track={t.surface2}
+          fill={over ? t.danger : t.primary}
+        />
       </View>
 
       <View
@@ -176,8 +175,8 @@ export default function MacroSummaryCard({
         }}
       />
 
-      <View style={{ flexDirection: 'row', gap: space.md }}>
-        <MiniMacro
+      <View style={{ gap: space.md }}>
+        <MacroBarRow
           row={{
             label: 'Protein',
             cur: protein.cur,
@@ -185,7 +184,7 @@ export default function MacroSummaryCard({
             color: t.protein,
           }}
         />
-        <MiniMacro
+        <MacroBarRow
           row={{
             label: 'Carbs',
             cur: carbs.cur,
@@ -193,8 +192,13 @@ export default function MacroSummaryCard({
             color: t.carbs,
           }}
         />
-        <MiniMacro
-          row={{ label: 'Fat', cur: fat.cur, target: fat.target, color: t.fat }}
+        <MacroBarRow
+          row={{
+            label: 'Fat',
+            cur: fat.cur,
+            target: fat.target,
+            color: t.fat,
+          }}
         />
       </View>
     </View>

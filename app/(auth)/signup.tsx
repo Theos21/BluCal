@@ -97,7 +97,6 @@ function Field({
 
 export default function SignUp() {
   const t = useTheme();
-  const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirm, setConfirm] = useState('');
@@ -107,7 +106,6 @@ export default function SignUp() {
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   const validate = (): string | null => {
-    if (!name.trim()) return 'Please enter your full name.';
     if (!email.trim()) return 'Please enter your email.';
     if (!isValidEmail(email.trim())) return 'Please enter a valid email address.';
     if (!password) return 'Please enter a password.';
@@ -125,7 +123,7 @@ export default function SignUp() {
     setErrorMsg(null);
     setLoading(true);
     try {
-      await signUp(email.trim(), password, name.trim());
+      await signUp(email.trim(), password);
       router.replace('/(auth)/onboarding');
     } catch (e: unknown) {
       const message =
@@ -192,15 +190,6 @@ export default function SignUp() {
               gap: space.md,
             }}
           >
-            <Field
-              t={t}
-              label="Full name"
-              value={name}
-              onChangeText={setName}
-              placeholder="Jane Doe"
-              autoCapitalize="words"
-              textContentType="name"
-            />
             <Field
               t={t}
               label="Email"

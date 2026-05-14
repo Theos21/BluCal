@@ -6,6 +6,7 @@ import {
   Modal,
   Pressable,
   ScrollView,
+  Share,
   Switch,
   Text,
   TextInput,
@@ -18,7 +19,12 @@ import Svg, { Circle, G } from 'react-native-svg';
 import { radius, space, type as typo, useTheme } from '../../lib/theme';
 import { signOut } from '../../lib/auth';
 import { useAuth } from '../../lib/AuthContext';
-import { calculateMomentumScore, getStreak, updateProfile } from '../../lib/db';
+import {
+  calculateMomentumScore,
+  getFoodEntriesForDateRange,
+  getStreak,
+  updateProfile,
+} from '../../lib/db';
 import { supabase } from '../../lib/supabase';
 import { isAvailable, requestPermissions } from '../../lib/appleHealth';
 import {
@@ -26,6 +32,7 @@ import {
   scheduleDailyLogReminder,
   scheduleWeeklySummary,
   scheduleWeighInReminder,
+  sendTestNotification,
 } from '../../lib/notifications';
 import Toast from '../../components/Toast';
 import { useToast } from '../../lib/useToast';
@@ -65,6 +72,15 @@ function formatGoalWeight(
   if (kg === null || kg === undefined) return 'Not set';
   if (isMetric) return `${kg.toFixed(1)} kg`;
   return `${(kg * 2.20462).toFixed(1)} lbs`;
+}
+
+function formatBirthday(birthday: string | null | undefined): string {
+  if (!birthday) return 'Not set';
+  return new Date(birthday).toLocaleDateString('en-US', {
+    month: 'long',
+    day: 'numeric',
+    year: 'numeric',
+  });
 }
 
 function formatHour12(hour24: number): string {
@@ -732,6 +748,7 @@ export default function Profile() {
           profile?.notif_log_reminder_hour ?? 20,
           0,
         );
+        await sendTestNotification();
       } else {
         await cancelAllNotifications();
         if (weighInReminder)
@@ -822,6 +839,73 @@ export default function Profile() {
     }
   };
 
+  const handleConnectedScale = () => {
+    Alert.alert(
+      'Connected Scale',
+      'BluCal supports Apple Health compatible smart scales. Connect your scale to Apple Health and your weight will sync automatically to BluCal.',
+      [{ text: 'OK' }],
+    );
+  };
+
+  const handleExportData = async () => {
+    if (!user) return;
+    try {
+      const entries = await getFoodEntriesForDateRange(
+        user.id,
+        new Date(Date.now() - 90 * 24 * 60 * 60 * 1000),
+        new Date(),
+      );
+      const escape = (v: string): string =>
+        /[",\n]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v;
+      const csv = [
+        'Date,Food,Calories,Protein,Carbs,Fat',
+        ...entries.map((e) =>
+          [
+            new Date(e.logged_at).toLocaleDateString(),
+            escape(e.name),
+            e.calories,
+            e.protein_g,
+            e.carbs_g,
+            e.fat_g,
+          ].join(','),
+        ),
+      ].join('\n');
+
+      await Share.share({
+        message: csv,
+        title: 'BluCal Food Log Export',
+      });
+    } catch {
+      toast.show('Could not export data. Try again.', 'error');
+    }
+  };
+
+  const handleRate = () => {
+    void Linking.openURL(
+      'https://apps.apple.com/app/id6768892775?action=write-review',
+    );
+  };
+
+  const handleShareApp = () => {
+    void Share.share({
+      message:
+        'Check out BluCal, a free macro and calorie tracker! https://apps.apple.com/app/id6768892775',
+      title: 'BluCal',
+    });
+  };
+
+  const handlePrivacy = () => {
+    void Linking.openURL(
+      'https://github.com/Theos21/BluCal/blob/main/PRIVACY.md',
+    );
+  };
+
+  const handleTOS = () => {
+    void Linking.openURL(
+      'https://github.com/Theos21/BluCal/blob/main/PRIVACY.md',
+    );
+  };
+
   const handleDeleteAll = () => {
     Alert.alert(
       'Delete all data?',
@@ -901,7 +985,7 @@ export default function Profile() {
           />
           <SettingsRow
             label="Birthday"
-            value={profile?.birthday ?? 'Not set'}
+            value={formatBirthday(profile?.birthday)}
             onPress={() => router.push('/edit-profile')}
           />
           <SettingsRow
@@ -1020,6 +1104,7 @@ export default function Profile() {
             icon="speedometer-outline"
             label="Connected scale"
             value="Not connected"
+            onPress={handleConnectedScale}
             isLast
           />
         </Section>
@@ -1041,6 +1126,7 @@ export default function Profile() {
           <SettingsRow
             icon="download-outline"
             label="Export my data"
+            onPress={handleExportData}
           />
           <SettingsRow
             icon="trash-outline"
@@ -1054,12 +1140,25 @@ export default function Profile() {
         {/* About */}
         <SectionLabel label="About" />
         <Section>
-          <SettingsRow icon="star-outline" label="Rate BluCal" />
-          <SettingsRow icon="share-outline" label="Share BluCal" />
-          <SettingsRow icon="document-outline" label="Privacy policy" />
+          <SettingsRow
+            icon="star-outline"
+            label="Rate BluCal"
+            onPress={handleRate}
+          />
+          <SettingsRow
+            icon="share-outline"
+            label="Share BluCal"
+            onPress={handleShareApp}
+          />
+          <SettingsRow
+            icon="document-outline"
+            label="Privacy policy"
+            onPress={handlePrivacy}
+          />
           <SettingsRow
             icon="document-outline"
             label="Terms of service"
+            onPress={handleTOS}
             isLast
           />
         </Section>

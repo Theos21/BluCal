@@ -67,6 +67,17 @@ export const cancelNotification = async (id: string): Promise<void> => {
   await Notifications.cancelScheduledNotificationAsync(id);
 };
 
+export const sendTestNotification = async (): Promise<void> => {
+  await scheduleLocalNotification(
+    'Notifications are working!',
+    'You will receive reminders from BluCal.',
+    {
+      type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL,
+      seconds: 3,
+    },
+  );
+};
+
 export const cancelAllNotifications = async (): Promise<void> => {
   await Notifications.cancelAllScheduledNotificationsAsync();
 };

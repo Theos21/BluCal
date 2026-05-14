@@ -42,8 +42,8 @@ export default function ResetPassword() {
         'Your password has been updated successfully.',
         [
           {
-            text: 'Sign in',
-            onPress: () => router.replace('/(auth)/signin'),
+            text: 'Continue',
+            onPress: () => router.replace('/(tabs)'),
           },
         ],
       );

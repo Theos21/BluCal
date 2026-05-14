@@ -3,8 +3,10 @@ import { ActivityIndicator, Text, View } from 'react-native';
 import { Stack, useRouter } from 'expo-router';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
+import * as Linking from 'expo-linking';
 import { useTheme } from '../lib/theme';
 import { AuthProvider, useAuth } from '../lib/AuthContext';
+import { supabase } from '../lib/supabase';
 
 class ErrorBoundary extends React.Component<
   { children: React.ReactNode },
@@ -77,6 +79,42 @@ function RootNavigator() {
       }
     }, 0);
   }, [session, profile, loading]);
+
+  // Deep-link handler for OAuth callbacks and password-recovery links. The
+  // primary OAuth success path is handled inline by signInWithGoogle via
+  // WebBrowser.openAuthSessionAsync; this is the fallback for cases where
+  // the user lands in the app via a fresh deep link (e.g., tapping a magic
+  // link or a password-reset email).
+  useEffect(() => {
+    const handleDeepLink = async (url: string) => {
+      try {
+        if (url.includes('type=recovery')) {
+          await supabase.auth.exchangeCodeForSession(url);
+          // TODO: create app/(auth)/reset-password.tsx — this route does
+          // not exist yet, so password recovery links currently land on a
+          // missing screen.
+          router.replace('/(auth)/reset-password' as never);
+          return;
+        }
+        if (url.includes('code=') || url.includes('access_token=')) {
+          const { data, error } =
+            await supabase.auth.exchangeCodeForSession(url);
+          if (!error && data.session) router.replace('/(tabs)');
+        }
+      } catch (e) {
+        console.error('Deep link handler error:', e);
+      }
+    };
+
+    const sub = Linking.addEventListener('url', ({ url }) => {
+      void handleDeepLink(url);
+    });
+    void Linking.getInitialURL().then((url) => {
+      if (url) void handleDeepLink(url);
+    });
+
+    return () => sub.remove();
+  }, [router]);
 
   if (loading) {
     // theme context may not be ready on cold boot, so the spinner uses

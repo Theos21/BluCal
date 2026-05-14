@@ -418,10 +418,19 @@ export const upsertProfile = async (
   userId: string,
   updates: Partial<Profile>,
 ): Promise<Profile> => {
+  // show_school is non-nullable in the DB but was added later without a
+  // backfill default for some environments. Include true as a fallback so
+  // upserts on rows where the column was set null don't fail; callers can
+  // still override via `updates`.
   const { data, error } = await supabase
     .from('profiles')
     .upsert(
-      { id: userId, ...updates, updated_at: new Date().toISOString() },
+      {
+        id: userId,
+        show_school: true,
+        ...updates,
+        updated_at: new Date().toISOString(),
+      },
       { onConflict: 'id' },
     )
     .select()

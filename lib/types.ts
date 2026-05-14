@@ -36,6 +36,7 @@ export interface Profile {
   dietary_preferences: string[];
   pace: Pace;
   apple_health_connected: boolean;
+  show_school?: boolean;
   notif_log_reminder?: boolean;
   notif_log_reminder_hour?: number;
   notif_weigh_in?: boolean;

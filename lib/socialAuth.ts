@@ -70,6 +70,10 @@ export const signInWithGoogle = async (): Promise<void> => {
     options: {
       redirectTo,
       skipBrowserRedirect: true,
+      queryParams: {
+        access_type: 'offline',
+        prompt: 'consent',
+      },
     },
   });
   if (error) throw error;

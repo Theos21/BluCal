@@ -19,7 +19,9 @@
       "bundleIdentifier": "com.blucal.app",
       "usesAppleSignIn": true,
       "entitlements": {
-        "com.apple.developer.applesignin": ["Default"]
+        "com.apple.developer.applesignin": [
+          "Default"
+        ]
       },
       "infoPlist": {
         "NSCameraUsageDescription": "BluCal uses your camera to scan food barcodes and analyze meals with BluAI.",
@@ -69,12 +71,7 @@
         }
       ],
       "expo-apple-authentication",
-      [
-        "@react-native-google-signin/google-signin",
-        {
-          "iosUrlScheme": "com.googleusercontent.apps.33755275712-9i38v9q8urpqn7mem2u0613ikummocf9"
-        }
-      ]
+      "expo-web-browser"
     ],
     "extra": {
       "router": {},

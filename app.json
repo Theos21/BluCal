@@ -49,6 +49,7 @@
     },
     "plugins": [
       "expo-router",
+      "expo-apple-authentication",
       [
         "react-native-health",
         {
@@ -59,21 +60,12 @@
       [
         "expo-notifications",
         {
-          "_comment": "TODO: ./assets/notification-icon.png does not exist yet — add a 96x96 PNG before the App Store build.",
           "icon": "./assets/notification-icon.png",
           "color": "#185FA5",
           "sounds": []
         }
       ],
-      [
-        "expo-speech-recognition",
-        {
-          "microphonePermission": "BluCal uses your microphone to let you log food by voice.",
-          "speechRecognitionPermission": "BluCal uses speech recognition to convert your voice into food searches."
-        }
-      ],
-      "expo-apple-authentication",
-      "expo-web-browser"
+      "expo-speech-recognition"
     ],
     "extra": {
       "router": {},

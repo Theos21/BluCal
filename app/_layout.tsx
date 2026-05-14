@@ -90,10 +90,7 @@ function RootNavigator() {
       try {
         if (url.includes('type=recovery')) {
           await supabase.auth.exchangeCodeForSession(url);
-          // TODO: create app/(auth)/reset-password.tsx — this route does
-          // not exist yet, so password recovery links currently land on a
-          // missing screen.
-          router.replace('/(auth)/reset-password' as never);
+          router.replace('/(auth)/reset-password');
           return;
         }
         if (url.includes('code=') || url.includes('access_token=')) {

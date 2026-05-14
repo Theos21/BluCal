@@ -381,7 +381,7 @@ export default function BarcodeScanner() {
         user_id: user.id,
         logged_at: new Date().toISOString(),
         name: scannedProduct.name,
-        portion_description: `${quantity * scannedProduct.serving_size}${scannedProduct.serving_unit}`,
+        portion_description: `${quantity} serving${quantity !== 1 ? 's' : ''} (${quantity * scannedProduct.serving_size}${scannedProduct.serving_unit})`,
         quantity,
         unit: scannedProduct.serving_unit,
         calories: scaledCalories,

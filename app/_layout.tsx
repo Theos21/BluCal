@@ -60,25 +60,21 @@ class ErrorBoundary extends React.Component<
 function RootNavigator() {
   const t = useTheme();
   const router = useRouter();
-  const { session, profile, loading } = useAuth();
+  const { session, profile, loading, refreshProfile } = useAuth();
 
   useEffect(() => {
     if (loading) return;
-    setTimeout(() => {
-      if (!session) {
-        router.replace('/(auth)/welcome');
-        return;
-      }
-      // New social-auth users get a profile row (via the new-user trigger)
-      // but no onboarding data — route them to onboarding until `goal` is
-      // set. Email/password signup already routes via that flow itself.
-      if (profile && !profile.goal) {
-        router.replace('/(auth)/onboarding');
-      } else {
-        router.replace('/(tabs)');
-      }
-    }, 0);
-  }, [session, profile, loading]);
+    if (!session) {
+      router.replace('/(auth)/welcome');
+      return;
+    }
+    if (profile === undefined) return; // still loading profile
+    if (profile === null || !profile.goal) {
+      router.replace('/(auth)/onboarding');
+      return;
+    }
+    router.replace('/(tabs)');
+  }, [session, profile, loading, router]);
 
   // Deep-link handler for OAuth callbacks and password-recovery links. The
   // primary OAuth success path is handled inline by signInWithGoogle via
@@ -96,7 +92,10 @@ function RootNavigator() {
         if (url.includes('code=') || url.includes('access_token=')) {
           const { data, error } =
             await supabase.auth.exchangeCodeForSession(url);
-          if (!error && data.session) router.replace('/(tabs)');
+          if (!error && data.session) {
+            await refreshProfile();
+            // routing handled by the useEffect above
+          }
         }
       } catch (e) {
         console.error('Deep link handler error:', e);
@@ -111,9 +110,9 @@ function RootNavigator() {
     });
 
     return () => sub.remove();
-  }, [router]);
+  }, [router, refreshProfile]);
 
-  if (loading) {
+  if (loading || (session && profile === undefined)) {
     // theme context may not be ready on cold boot, so the spinner uses
     // hardcoded brand colors instead of useTheme().
     return (

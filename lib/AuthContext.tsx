@@ -14,7 +14,7 @@ import type { Profile } from './types';
 interface AuthContextType {
   session: Session | null;
   user: User | null;
-  profile: Profile | null;
+  profile: Profile | null | undefined;
   loading: boolean;
   refreshProfile: () => Promise<void>;
 }
@@ -22,7 +22,7 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType>({
   session: null,
   user: null,
-  profile: null,
+  profile: undefined,
   loading: true,
   refreshProfile: async () => {},
 });
@@ -30,12 +30,13 @@ const AuthContext = createContext<AuthContextType>({
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [user, setUser] = useState<User | null>(null);
-  const [profile, setProfile] = useState<Profile | null>(null);
+  const [profile, setProfile] = useState<Profile | null | undefined>(undefined);
   const [loading, setLoading] = useState(true);
 
   const refreshProfile = async () => {
-    if (user) {
-      const p = await getProfile(user.id);
+    const { data: { session: s } } = await supabase.auth.getSession();
+    if (s?.user) {
+      const p = await getProfile(s.user.id);
       setProfile(p);
     }
   };

@@ -530,7 +530,7 @@ export default function EditMacros() {
   }, [profile, currentWeightKg, age, pace]);
 
   const profileComplete =
-    profile !== null &&
+    profile != null &&
     currentWeightKg !== null &&
     profile.height_cm !== null &&
     age !== null &&

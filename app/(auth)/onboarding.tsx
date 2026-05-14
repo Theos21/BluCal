@@ -17,7 +17,9 @@ import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { radius, space, type as typo, useTheme, type Theme } from '../../lib/theme';
 import { useAuth } from '../../lib/AuthContext';
-import { addWeightEntry, setMacroTarget, updateProfile } from '../../lib/db';
+import { addWeightEntry, setMacroTarget, upsertProfile } from '../../lib/db';
+import Toast from '../../components/Toast';
+import { useToast } from '../../lib/useToast';
 import { isAvailable, requestPermissions } from '../../lib/appleHealth';
 import type { ActivityLevel, BiologicalSex, Goal, Pace } from '../../lib/types';
 import {
@@ -578,10 +580,24 @@ function mapActivityToDb(id: string | null): ActivityLevel | null {
 // ── Main screen ──────────────────────────────────────────────────────────────
 export default function Onboarding() {
   const t = useTheme();
+  const toast = useToast();
   const { user, refreshProfile } = useAuth();
   const [step, setStep] = useState(0);
   const [saving, setSaving] = useState(false);
+  const [healthAvailable, setHealthAvailable] = useState(false);
   const progressAnim = useRef(new Animated.Value(1 / TOTAL_STEPS)).current;
+
+  // Probe HealthKit availability when the user reaches the Apple Health step.
+  // On simulator / Expo Go / unlinked builds this returns false silently and
+  // we relabel the primary button as "Skip for now" to avoid pretending the
+  // connection succeeded.
+  useEffect(() => {
+    if (step === 6) {
+      isAvailable()
+        .then(setHealthAvailable)
+        .catch(() => setHealthAvailable(false));
+    }
+  }, [step]);
 
   useEffect(() => {
     Animated.timing(progressAnim, {
@@ -706,7 +722,7 @@ export default function Onboarding() {
       const ageNum = Number(age);
       const birthday =
         Number.isFinite(ageNum) && ageNum > 0 ? birthdayFromAge(ageNum) : null;
-      await updateProfile(user.id, {
+      await upsertProfile(user.id, {
         name,
         biological_sex: mapSexToDb(sex),
         birthday,
@@ -772,14 +788,25 @@ export default function Onboarding() {
   const handleAppleHealth = async () => {
     try {
       const available = await isAvailable();
-      if (available) {
-        await requestPermissions();
+      if (!available) {
+        // No HealthKit on this device/build — advance silently without
+        // pretending we connected.
+        handleNext();
+        return;
+      }
+      const granted = await requestPermissions();
+      if (granted && user) {
+        await upsertProfile(user.id, { apple_health_connected: true });
+        toast.show('Apple Health connected', 'success');
+      } else if (!granted) {
+        toast.show(
+          'Apple Health permission denied. You can connect later in Settings.',
+          'info',
+        );
       }
     } catch (e) {
-      console.error(e);
+      console.error('Apple Health onboarding error:', e);
     }
-    // Always advance regardless of permission outcome — Apple Health is
-    // optional, and on simulator / Expo Go it's silently unavailable.
     handleNext();
   };
 
@@ -1243,21 +1270,23 @@ export default function Onboarding() {
                 })}
               >
                 <Text style={[typo.headline, { color: t.textOnPrim }]}>
-                  Connect Apple Health
+                  {healthAvailable ? 'Connect Apple Health' : 'Skip for now'}
                 </Text>
               </Pressable>
-              <Pressable
-                onPress={handleNext}
-                hitSlop={6}
-                style={({ pressed }) => ({
-                  marginTop: space.lg,
-                  opacity: pressed ? 0.6 : 1,
-                })}
-              >
-                <Text style={[typo.subhead, { color: t.textSec }]}>
-                  Skip for now
-                </Text>
-              </Pressable>
+              {healthAvailable && (
+                <Pressable
+                  onPress={handleNext}
+                  hitSlop={6}
+                  style={({ pressed }) => ({
+                    marginTop: space.lg,
+                    opacity: pressed ? 0.6 : 1,
+                  })}
+                >
+                  <Text style={[typo.subhead, { color: t.textSec }]}>
+                    Skip for now
+                  </Text>
+                </Pressable>
+              )}
             </View>
           )}
 
@@ -1373,6 +1402,13 @@ export default function Onboarding() {
           </Pressable>
         </View>
       </KeyboardAvoidingView>
+      <Toast
+        message={toast.message}
+        visible={toast.visible}
+        type={toast.type}
+        duration={toast.duration}
+        onHide={toast.hide}
+      />
     </SafeAreaView>
   );
 }

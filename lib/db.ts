@@ -410,6 +410,26 @@ export const updateProfile = async (
   return data as Profile;
 };
 
+// Insert-or-update. Use for flows (e.g., onboarding) where the row may not
+// exist yet because the new-user trigger hasn't completed, or could be
+// missing after manual cleanup. Plain `updateProfile` requires the row to
+// exist and silently returns no rows otherwise.
+export const upsertProfile = async (
+  userId: string,
+  updates: Partial<Profile>,
+): Promise<Profile> => {
+  const { data, error } = await supabase
+    .from('profiles')
+    .upsert(
+      { id: userId, ...updates, updated_at: new Date().toISOString() },
+      { onConflict: 'id' },
+    )
+    .select()
+    .single();
+  if (error) throw error;
+  return data as Profile;
+};
+
 // ── Feeling entries ──────────────────────────────────────────────────────────
 export const getFeelingEntriesForDate = async (
   userId: string,

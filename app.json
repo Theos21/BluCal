@@ -19,12 +19,17 @@
       "bundleIdentifier": "com.blucal.app",
       "usesAppleSignIn": true,
       "entitlements": {
-        "com.apple.developer.applesignin": ["Default"]
+        "com.apple.developer.applesignin": [
+          "Default",
+          "Default"
+        ]
       },
       "infoPlist": {
         "NSCameraUsageDescription": "BluCal uses your camera to scan food barcodes and analyze meals with BluAI.",
         "NSPhotoLibraryUsageDescription": "BluCal accesses your photos so you can upload a meal photo to BluAI.",
-        "NSMicrophoneUsageDescription": "BluCal uses your microphone for voice food logging."
+        "NSMicrophoneUsageDescription": "BluCal uses your microphone to let you log food by voice.",
+        "NSSpeechRecognitionUsageDescription": "BluCal uses speech recognition to convert your voice into food searches.",
+        "ITSAppUsesNonExemptEncryption": false
       }
     },
     "android": {
@@ -33,7 +38,10 @@
         "backgroundColor": "#ffffff"
       },
       "edgeToEdgeEnabled": true,
-      "predictiveBackGestureEnabled": false
+      "predictiveBackGestureEnabled": false,
+      "permissions": [
+        "android.permission.RECORD_AUDIO"
+      ]
     },
     "web": {
       "favicon": "./assets/favicon.png"
@@ -70,6 +78,12 @@
           "iosUrlScheme": "com.googleusercontent.apps.33755275712-9i38v9q8urpqn7mem2u0613ikummocf9"
         }
       ]
-    ]
+    ],
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "1adfadff-76af-4958-bacf-03b01d2b9141"
+      }
+    }
   }
 }

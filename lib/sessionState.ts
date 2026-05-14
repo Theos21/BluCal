@@ -4,6 +4,7 @@
 let _feelingDismissed = false;
 let _justLoggedFood: string | null = null;
 let _celebrationDismissedForStreak: number = 0;
+let _bluAITipDismissed = false;
 
 export const sessionState = {
   getFeelingDismissed: () => _feelingDismissed,
@@ -17,5 +18,9 @@ export const sessionState = {
   getCelebrationDismissedForStreak: () => _celebrationDismissedForStreak,
   setCelebrationDismissedForStreak: (streak: number) => {
     _celebrationDismissedForStreak = streak;
+  },
+  getBluAITipDismissed: () => _bluAITipDismissed,
+  setBluAITipDismissed: () => {
+    _bluAITipDismissed = true;
   },
 };

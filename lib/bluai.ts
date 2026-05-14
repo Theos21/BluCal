@@ -16,6 +16,7 @@ export interface BluAIFoodItem {
 export interface BluAIResult {
   items: BluAIFoodItem[];
   questions: string[];
+  confidenceNote?: string | null;
 }
 
 export type BluAIError =
@@ -88,8 +89,15 @@ export const analyzeMealPhoto = async (
   base64Image: string,
   mimeType: BluAIMimeType,
   userNotes?: string,
+  hasDepth?: boolean,
 ): Promise<BluAIResult> => {
-  return invokeBluAI({ base64Image, mimeType, userNotes, mode: 'analyze' });
+  return invokeBluAI({
+    base64Image,
+    mimeType,
+    userNotes,
+    hasDepth,
+    mode: 'analyze',
+  });
 };
 
 export const refineMealAnalysis = async (

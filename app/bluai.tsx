@@ -59,6 +59,7 @@ type CapturedImage = {
   base64: string;
   uri: string;
   mimeType: BluAIMimeType;
+  hasDepth?: boolean;
 };
 
 type Phase = 'camera' | 'analyzing' | 'results';
@@ -208,6 +209,15 @@ export default function BluAI() {
   const [activeField, setActiveField] = useState<ActiveField | null>(null);
   const [draftText, setDraftText] = useState('');
   const [keyboardHeight, setKeyboardHeight] = useState(0);
+  const [confidenceNote, setConfidenceNote] = useState<string | null>(null);
+  const [showTip, setShowTip] = useState(
+    !sessionState.getBluAITipDismissed(),
+  );
+
+  const handleDismissTip = () => {
+    setShowTip(false);
+    sessionState.setBluAITipDismissed();
+  };
 
   // Refs mirror activeField + draftText so the keyboard listener (attached
   // once, on mount) always sees the latest values without stale closures.
@@ -298,6 +308,7 @@ export default function BluAI() {
     setDraftText('');
     setTextDescription('');
     setMode('camera');
+    setConfidenceNote(null);
   };
 
   const handleTextAnalysis = async () => {
@@ -310,6 +321,7 @@ export default function BluAI() {
       setDetectedItems(result.items);
       setFollowUpQuestions(result.questions);
       setCheckedIds(new Set(result.items.map((i) => i.id)));
+      setConfidenceNote(result.confidenceNote ?? null);
       setPhase('results');
     } catch (e) {
       console.error(e);
@@ -342,12 +354,17 @@ export default function BluAI() {
     }
   }, [permission, requestPermission]);
 
-  const runAnalysis = async (base64: string, mimeType: BluAIMimeType) => {
+  const runAnalysis = async (
+    base64: string,
+    mimeType: BluAIMimeType,
+    hasDepth?: boolean,
+  ) => {
     try {
-      const result = await analyzeMealPhoto(base64, mimeType);
+      const result = await analyzeMealPhoto(base64, mimeType, undefined, hasDepth);
       setDetectedItems(result.items);
       setFollowUpQuestions(result.questions);
       setCheckedIds(new Set(result.items.map((i) => i.id)));
+      setConfidenceNote(result.confidenceNote ?? null);
       setPhase('results');
     } catch (e) {
       console.error(e);
@@ -372,17 +389,23 @@ export default function BluAI() {
       const photo = await cameraRef.current.takePictureAsync({
         base64: true,
         quality: 0.7,
-        exif: false,
+        exif: true,
       });
       if (!photo?.base64) throw new Error('No image data');
+      const exif = (photo.exif ?? {}) as Record<string, unknown>;
+      const lensModel = typeof exif.LensModel === 'string' ? exif.LensModel : '';
+      const make = typeof exif.Make === 'string' ? exif.Make : '';
+      const hasDepth = lensModel.includes('Wide') || make === 'Apple';
       const captured: CapturedImage = {
         base64: photo.base64,
         uri: photo.uri,
         mimeType: 'image/jpeg',
+        hasDepth,
       };
       setCapturedImage(captured);
       setPhase('analyzing');
-      await runAnalysis(captured.base64, captured.mimeType);
+      handleDismissTip();
+      await runAnalysis(captured.base64, captured.mimeType, hasDepth);
     } catch (e) {
       console.error(e);
       setPhase('camera');
@@ -405,7 +428,8 @@ export default function BluAI() {
     };
     setCapturedImage(captured);
     setPhase('analyzing');
-    await runAnalysis(captured.base64, captured.mimeType);
+    handleDismissTip();
+    await runAnalysis(captured.base64, captured.mimeType, captured.hasDepth);
   };
 
   const handleRefine = async () => {
@@ -709,6 +733,51 @@ export default function BluAI() {
                 </View>
               </View>
 
+              {/* Reference-object tip — dismissable, hidden after first photo */}
+              {showTip && (
+                <Pressable
+                  onPress={handleDismissTip}
+                  style={{
+                    position: 'absolute',
+                    bottom: 140,
+                    left: 20,
+                    right: 20,
+                    backgroundColor: 'rgba(0,0,0,0.75)',
+                    borderRadius: 14,
+                    padding: 14,
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    gap: 10,
+                  }}
+                >
+                  <Ionicons
+                    name="information-circle-outline"
+                    size={22}
+                    color={t.textOnPrim}
+                  />
+                  <View style={{ flex: 1 }}>
+                    <Text
+                      style={{
+                        color: t.textOnPrim,
+                        fontWeight: '600',
+                        fontSize: 13,
+                      }}
+                    >
+                      Better accuracy tip
+                    </Text>
+                    <Text
+                      style={{
+                        color: 'rgba(255,255,255,0.8)',
+                        fontSize: 12,
+                        marginTop: 2,
+                      }}
+                    >
+                      Place your hand, a coin, or a credit card next to the food for more accurate portion estimates. Tap to dismiss.
+                    </Text>
+                  </View>
+                </Pressable>
+              )}
+
               {/* Gallery picker (bottom-left) */}
               <View
                 style={{
@@ -893,6 +962,29 @@ export default function BluAI() {
           >
             What we found
           </Text>
+
+          {confidenceNote && (
+            <View
+              style={{
+                backgroundColor: t.successSoft,
+                borderRadius: radius.md,
+                padding: space.sm,
+                flexDirection: 'row',
+                alignItems: 'center',
+                gap: space.xs,
+                marginTop: space.sm,
+              }}
+            >
+              <Ionicons
+                name="checkmark-circle-outline"
+                size={16}
+                color={t.success}
+              />
+              <Text style={[typo.caption1, { color: t.success, flex: 1 }]}>
+                {confidenceNote}
+              </Text>
+            </View>
+          )}
 
           <ScrollView
             style={{ flex: 1 }}

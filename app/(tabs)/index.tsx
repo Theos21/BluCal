@@ -3,7 +3,9 @@ import {
   ActivityIndicator,
   Alert,
   Animated,
+  KeyboardAvoidingView,
   Modal,
+  Platform,
   Pressable,
   RefreshControl,
   ScrollView,
@@ -298,6 +300,10 @@ function WaterSheet({
           justifyContent: 'flex-end',
         }}
       >
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          keyboardVerticalOffset={20}
+        >
         <Pressable
           onPress={(e) => e.stopPropagation()}
           style={{
@@ -309,6 +315,10 @@ function WaterSheet({
             paddingBottom: insets.bottom + space.xl,
           }}
         >
+          <ScrollView
+            keyboardShouldPersistTaps="handled"
+            showsVerticalScrollIndicator={false}
+          >
           <View style={{ alignItems: 'center' }}>
             <View
               style={{
@@ -473,7 +483,9 @@ function WaterSheet({
               Reset to 0
             </Text>
           </Pressable>
+          </ScrollView>
         </Pressable>
+        </KeyboardAvoidingView>
       </Pressable>
     </Modal>
   );

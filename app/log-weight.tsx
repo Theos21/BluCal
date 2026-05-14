@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
+  Alert,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -18,7 +19,7 @@ import { radius, space, type as typo, useTheme, type Theme } from '../lib/theme'
 import Toast from '../components/Toast';
 import { useToast } from '../lib/useToast';
 import { useAuth } from '../lib/AuthContext';
-import { addWeightEntry, getWeightEntries } from '../lib/db';
+import { addWeightEntry, deleteWeightEntry, getWeightEntries } from '../lib/db';
 import type { WeightEntry } from '../lib/types';
 
 type Unit = 'lbs' | 'kg';
@@ -162,6 +163,43 @@ export default function LogWeight() {
     } finally {
       setSaving(false);
     }
+  };
+
+  const displayWeight = (kg: number | string): string => {
+    const num = Number(kg);
+    const val = unit === 'lbs' ? num * 2.20462 : num;
+    return `${val.toFixed(1)} ${unit}`;
+  };
+
+  const formatEntryDate = (iso: string): string =>
+    new Date(iso).toLocaleDateString('en-US', {
+      weekday: 'short',
+      month: 'short',
+      day: 'numeric',
+    });
+
+  const handleDeleteWeight = (entry: WeightEntry) => {
+    Alert.alert(
+      'Delete entry?',
+      `Remove ${displayWeight(entry.weight_kg)} from your log?`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await deleteWeightEntry(entry.id);
+              const updated = await getWeightEntries(user!.id, 7);
+              setRecentWeights(updated);
+              toast.show('Entry deleted', 'success');
+            } catch {
+              toast.show('Could not delete entry.', 'error');
+            }
+          },
+        },
+      ],
+    );
   };
 
   const logDisabled = saving || !weight;
@@ -388,6 +426,96 @@ export default function LogWeight() {
             </Text>
             <WeightSparkline width={chartWidth} data={paddedData} t={t} />
           </View>
+
+          {/* Recent entries */}
+          {recentWeights.length > 0 && (
+            <View style={{ marginTop: space.xl }}>
+              <Text
+                style={[
+                  typo.caption2,
+                  {
+                    color: t.textTer,
+                    letterSpacing: 0.06,
+                    textTransform: 'uppercase',
+                    fontWeight: '700',
+                    marginBottom: space.sm,
+                  },
+                ]}
+              >
+                Recent entries
+              </Text>
+              <View
+                style={{
+                  backgroundColor: t.surface,
+                  borderRadius: radius.lg,
+                  borderWidth: 1,
+                  borderColor: t.hairline,
+                  overflow: 'hidden',
+                }}
+              >
+                {recentWeights
+                  .slice()
+                  .reverse()
+                  .map((entry, i, arr) => {
+                    const isLast = i === arr.length - 1;
+                    return (
+                      <View key={entry.id}>
+                        <View
+                          style={{
+                            flexDirection: 'row',
+                            alignItems: 'center',
+                            paddingHorizontal: space.lg,
+                            paddingVertical: 12,
+                            gap: space.sm,
+                          }}
+                        >
+                          <View style={{ flex: 1, minWidth: 0 }}>
+                            <Text style={[typo.subhead, { color: t.text }]}>
+                              {displayWeight(entry.weight_kg)}
+                            </Text>
+                            <Text
+                              style={[
+                                typo.caption1,
+                                { color: t.textTer, marginTop: 2 },
+                              ]}
+                            >
+                              {formatEntryDate(entry.logged_at)}
+                            </Text>
+                          </View>
+                          <Pressable
+                            onPress={() => handleDeleteWeight(entry)}
+                            hitSlop={8}
+                            style={({ pressed }) => ({
+                              width: 36,
+                              height: 36,
+                              borderRadius: radius.md,
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              opacity: pressed ? 0.6 : 1,
+                            })}
+                          >
+                            <Ionicons
+                              name="trash-outline"
+                              size={18}
+                              color={t.danger}
+                            />
+                          </Pressable>
+                        </View>
+                        {!isLast && (
+                          <View
+                            style={{
+                              height: 0.5,
+                              backgroundColor: t.hairline,
+                              marginLeft: space.lg,
+                            }}
+                          />
+                        )}
+                      </View>
+                    );
+                  })}
+              </View>
+            </View>
+          )}
         </ScrollView>
 
         {/* Log button */}

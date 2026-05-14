@@ -2,8 +2,11 @@ import { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Animated,
+  KeyboardAvoidingView,
   Linking,
+  Platform,
   Pressable,
+  ScrollView,
   Text,
   TextInput,
   View,
@@ -880,17 +883,27 @@ export default function BarcodeScanner() {
           transform: [{ translateY: sheetY }],
         }}
       >
-        {scannedProduct && (
-          <FoundSheetContent
-            product={scannedProduct}
-            onAdd={handleAddToLog}
-            onWrongProduct={handleWrongProduct}
-            saving={saving}
-          />
-        )}
-        {!scannedProduct && notFound && (
-          <NotFoundSheetContent barcode={lastBarcode} onRetry={handleRetry} />
-        )}
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          keyboardVerticalOffset={20}
+        >
+          <ScrollView
+            keyboardShouldPersistTaps="handled"
+            showsVerticalScrollIndicator={false}
+          >
+            {scannedProduct && (
+              <FoundSheetContent
+                product={scannedProduct}
+                onAdd={handleAddToLog}
+                onWrongProduct={handleWrongProduct}
+                saving={saving}
+              />
+            )}
+            {!scannedProduct && notFound && (
+              <NotFoundSheetContent barcode={lastBarcode} onRetry={handleRetry} />
+            )}
+          </ScrollView>
+        </KeyboardAvoidingView>
       </Animated.View>
 
       <Toast

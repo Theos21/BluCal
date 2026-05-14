@@ -26,7 +26,7 @@ import {
   updateProfile,
 } from '../../lib/db';
 import { supabase } from '../../lib/supabase';
-import { isAvailable, requestPermissions } from '../../lib/appleHealth';
+import { initializeHealthKit, isAvailable } from '../../lib/appleHealth';
 import {
   cancelAllNotifications,
   scheduleDailyLogReminder,
@@ -76,7 +76,9 @@ function formatGoalWeight(
 
 function formatBirthday(birthday: string | null | undefined): string {
   if (!birthday) return 'Not set';
-  return new Date(birthday).toLocaleDateString('en-US', {
+  const [year, month, day] = birthday.split('-').map(Number);
+  const date = new Date(year, month - 1, day);
+  return date.toLocaleDateString('en-US', {
     month: 'long',
     day: 'numeric',
     year: 'numeric',
@@ -935,25 +937,24 @@ export default function Profile() {
       if (!available) {
         Alert.alert(
           'Apple Health',
-          'Apple Health is not available on this device.',
+          'Apple Health is not available on this device. Make sure you are on a real iPhone and the Health app is installed.',
         );
         return;
       }
-      const granted = await requestPermissions();
-      if (!granted) {
+      const initialized = await initializeHealthKit();
+      if (initialized) {
+        toast.show('Apple Health connected', 'success');
+        await updateProfile(user!.id, { apple_health_connected: true });
+        await refreshProfile();
+      } else {
         Alert.alert(
           'Permission denied',
-          'You can enable Apple Health access in your iPhone Settings.',
+          'You can enable Apple Health access in iPhone Settings → Privacy → Health → BluCal.',
         );
-        return;
       }
-      if (user) {
-        await updateProfile(user.id, { apple_health_connected: true });
-        await refreshProfile();
-      }
-      toast.show('Apple Health connected', 'success');
-    } catch {
-      Alert.alert('Error', 'Could not connect to Apple Health.');
+    } catch (e) {
+      console.error('Apple Health error:', e);
+      Alert.alert('Error', 'Could not connect to Apple Health. Please try again.');
     }
   };
 
@@ -1038,6 +1039,12 @@ export default function Profile() {
           <SettingsRow
             icon="body-outline"
             label="Body measurements"
+            onPress={() => router.push('/body-measurements')}
+          />
+          <SettingsRow
+            icon="camera-outline"
+            label="Progress Photos"
+            value="View and compare"
             onPress={() => router.push('/body-measurements')}
           />
           <SettingsRow

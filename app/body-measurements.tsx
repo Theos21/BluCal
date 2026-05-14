@@ -3,7 +3,9 @@ import {
   ActivityIndicator,
   Alert,
   Image,
+  KeyboardAvoidingView,
   Modal,
+  Platform,
   Pressable,
   ScrollView,
   Share,
@@ -402,6 +404,103 @@ export default function BodyMeasurements() {
           </Text>
         </View>
 
+        {/* Progress photos */}
+        <SectionLabel>Progress Photos</SectionLabel>
+        <View
+          style={{
+            paddingHorizontal: space.lg,
+            flexDirection: 'row',
+            flexWrap: 'wrap',
+            gap: 8,
+          }}
+        >
+          <Pressable
+            onPress={handleAddPhoto}
+            disabled={uploading}
+            style={({ pressed }) => ({
+              width: tileSize,
+              height: tileSize,
+              borderRadius: radius.md,
+              overflow: 'hidden',
+              borderWidth: 1.5,
+              borderColor: `${t.primary}66`,
+              borderStyle: 'dashed',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: 4,
+              opacity: uploading ? 0.5 : pressed ? 0.6 : 1,
+            })}
+          >
+            {uploading ? (
+              <ActivityIndicator color={t.primary} />
+            ) : (
+              <>
+                <Ionicons name="camera-outline" size={28} color={t.primary} />
+                <Text style={[typo.caption2, { color: t.primary }]}>
+                  Add photo
+                </Text>
+              </>
+            )}
+          </Pressable>
+          {photos.map((photo) => (
+            <Pressable
+              key={photo.id}
+              onPress={() => setSelectedPhoto(photo)}
+              onLongPress={() => handleDeletePhoto(photo)}
+              style={({ pressed }) => ({
+                width: tileSize,
+                height: tileSize,
+                borderRadius: radius.md,
+                overflow: 'hidden',
+                backgroundColor: t.surface2,
+                opacity: pressed ? 0.7 : 1,
+              })}
+            >
+              <Image
+                source={{ uri: photo.signedUrl }}
+                style={{ width: '100%', height: '100%' }}
+                resizeMode="cover"
+              />
+              <View
+                style={{
+                  position: 'absolute',
+                  bottom: 4,
+                  left: 4,
+                  backgroundColor: 'rgba(0,0,0,0.5)',
+                  borderRadius: 4,
+                  paddingHorizontal: 4,
+                  paddingVertical: 2,
+                }}
+              >
+                <Text style={[typo.caption2, { color: '#FFFFFF' }]}>
+                  {formatPhotoDate(photo.taken_at)}
+                </Text>
+              </View>
+            </Pressable>
+          ))}
+        </View>
+
+        <Pressable
+          onPress={handleCompare}
+          style={({ pressed }) => ({
+            marginHorizontal: space.lg,
+            marginTop: space.md,
+            backgroundColor: t.surface2,
+            borderRadius: radius.lg,
+            height: 44,
+            flexDirection: 'row',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: space.sm,
+            opacity: pressed ? 0.6 : 1,
+          })}
+        >
+          <Ionicons name="images-outline" size={18} color={t.text} />
+          <Text style={[typo.subhead, { color: t.text }]}>
+            Compare two photos
+          </Text>
+        </Pressable>
+
         {/* Current measurements */}
         <SectionLabel>Current measurements</SectionLabel>
         <SectionCard>
@@ -528,102 +627,6 @@ export default function BodyMeasurements() {
           </Pressable>
         </SectionCard>
 
-        {/* Progress photos */}
-        <SectionLabel>Progress photos</SectionLabel>
-        <View
-          style={{
-            paddingHorizontal: space.lg,
-            flexDirection: 'row',
-            flexWrap: 'wrap',
-            gap: 8,
-          }}
-        >
-          <Pressable
-            onPress={handleAddPhoto}
-            disabled={uploading}
-            style={({ pressed }) => ({
-              width: tileSize,
-              height: tileSize,
-              borderRadius: radius.md,
-              overflow: 'hidden',
-              borderWidth: 1.5,
-              borderColor: `${t.primary}66`,
-              borderStyle: 'dashed',
-              alignItems: 'center',
-              justifyContent: 'center',
-              gap: 4,
-              opacity: uploading ? 0.5 : pressed ? 0.6 : 1,
-            })}
-          >
-            {uploading ? (
-              <ActivityIndicator color={t.primary} />
-            ) : (
-              <>
-                <Ionicons name="camera-outline" size={28} color={t.primary} />
-                <Text style={[typo.caption2, { color: t.primary }]}>
-                  Add photo
-                </Text>
-              </>
-            )}
-          </Pressable>
-          {photos.map((photo) => (
-            <Pressable
-              key={photo.id}
-              onPress={() => setSelectedPhoto(photo)}
-              onLongPress={() => handleDeletePhoto(photo)}
-              style={({ pressed }) => ({
-                width: tileSize,
-                height: tileSize,
-                borderRadius: radius.md,
-                overflow: 'hidden',
-                backgroundColor: t.surface2,
-                opacity: pressed ? 0.7 : 1,
-              })}
-            >
-              <Image
-                source={{ uri: photo.signedUrl }}
-                style={{ width: '100%', height: '100%' }}
-                resizeMode="cover"
-              />
-              <View
-                style={{
-                  position: 'absolute',
-                  bottom: 4,
-                  left: 4,
-                  backgroundColor: 'rgba(0,0,0,0.5)',
-                  borderRadius: 4,
-                  paddingHorizontal: 4,
-                  paddingVertical: 2,
-                }}
-              >
-                <Text style={[typo.caption2, { color: '#FFFFFF' }]}>
-                  {formatPhotoDate(photo.taken_at)}
-                </Text>
-              </View>
-            </Pressable>
-          ))}
-        </View>
-
-        <Pressable
-          onPress={handleCompare}
-          style={({ pressed }) => ({
-            marginHorizontal: space.lg,
-            marginTop: space.md,
-            backgroundColor: t.surface2,
-            borderRadius: radius.lg,
-            height: 44,
-            flexDirection: 'row',
-            alignItems: 'center',
-            justifyContent: 'center',
-            gap: space.sm,
-            opacity: pressed ? 0.6 : 1,
-          })}
-        >
-          <Ionicons name="images-outline" size={18} color={t.text} />
-          <Text style={[typo.subhead, { color: t.text }]}>
-            Compare two photos
-          </Text>
-        </Pressable>
       </ScrollView>
 
       {/* Photo viewer */}
@@ -983,6 +986,10 @@ export default function BodyMeasurements() {
             justifyContent: 'flex-end',
           }}
         >
+          <KeyboardAvoidingView
+            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+            keyboardVerticalOffset={20}
+          >
           <Pressable
             onPress={(e) => e.stopPropagation()}
             style={{
@@ -994,6 +1001,10 @@ export default function BodyMeasurements() {
               paddingBottom: insets.bottom + space.lg,
             }}
           >
+            <ScrollView
+              keyboardShouldPersistTaps="handled"
+              showsVerticalScrollIndicator={false}
+            >
             {target && (
               <>
                 <Text
@@ -1141,7 +1152,9 @@ export default function BodyMeasurements() {
                 </Pressable>
               </>
             )}
+            </ScrollView>
           </Pressable>
+          </KeyboardAvoidingView>
         </Pressable>
       </Modal>
 

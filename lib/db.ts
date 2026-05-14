@@ -205,6 +205,14 @@ export const addWeightEntry = async (
   return data as WeightEntry;
 };
 
+export const deleteWeightEntry = async (id: string): Promise<void> => {
+  const { error } = await supabase
+    .from('weight_entries')
+    .delete()
+    .eq('id', id);
+  if (error) throw error;
+};
+
 // ── Water entries ────────────────────────────────────────────────────────────
 // Total water logged for the given local day, returned in fluid ounces
 // (rounded). Storage is in millilitres so the conversion factor 29.5735

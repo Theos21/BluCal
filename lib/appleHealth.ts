@@ -59,6 +59,22 @@ export const requestPermissions = (): Promise<boolean> =>
     });
   }, false);
 
+let healthKitInitialized = false;
+
+export const initializeHealthKit = (): Promise<boolean> =>
+  safePromise<boolean>((resolve) => {
+    AppleHealthKit.initHealthKit(PERMISSIONS, (err) => {
+      if (err) {
+        console.error('[appleHealth] initHealthKit error:', err);
+        resolve(false);
+      } else {
+        healthKitInitialized = true;
+        console.log('[appleHealth] initHealthKit success');
+        resolve(true);
+      }
+    });
+  }, false);
+
 export const writeNutrition = async (entry: {
   calories: number;
   protein_g: number;

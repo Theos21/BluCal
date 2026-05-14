@@ -23,8 +23,8 @@
         "NPM_CONFIG_LEGACY_PEER_DEPS": "true",
         "EXPO_PUBLIC_SUPABASE_URL": "https://inkpjlzostfaknvdfmte.supabase.co",
         "EXPO_PUBLIC_SUPABASE_ANON_KEY": "sb_publishable_pDz0Hhg0PVFCdEnhQP-6Tw_fViKmOTb",
-        "EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID": "33755275712-9ct3ckra0refthj54d058n7ngjk5fqav.apps.googleusercontent.com",
-        "EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID": "33755275712-9i38v9q8urpqn7mem2u0613ikummocf9.apps.googleusercontent.com"
+        "EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID": "1038999364153-i4d82396kkostis3vosr8i3i70vopk6u.apps.googleusercontent.com",
+        "EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID": "1038999364153-5tgh843258ha6lsq0n6f8eechbrhth48.apps.googleusercontent.com"
       }
     }
   },

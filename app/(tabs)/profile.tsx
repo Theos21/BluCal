@@ -841,9 +841,12 @@ export default function Profile() {
 
   const handleConnectedScale = () => {
     Alert.alert(
-      'Connected Scale',
-      'BluCal supports Apple Health compatible smart scales. Connect your scale to Apple Health and your weight will sync automatically to BluCal.',
-      [{ text: 'OK' }],
+      'Smart Scale',
+      "BluCal reads weight data from Apple Health. To connect your smart scale (Renpho, Withings, Fitbit, etc.):\n\n1. Open your scale's app\n2. Enable Apple Health sync in the scale app settings\n3. Connect Apple Health in BluCal\n\nYour weight will then sync to BluCal automatically after each weigh-in.",
+      [
+        { text: 'Connect Apple Health', onPress: handleAppleHealth },
+        { text: 'OK', style: 'cancel' },
+      ],
     );
   };
 

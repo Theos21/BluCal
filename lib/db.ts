@@ -418,22 +418,37 @@ export const upsertProfile = async (
   userId: string,
   updates: Partial<Profile>,
 ): Promise<Profile> => {
-  console.log('upsertProfile called with userId:', userId);
+  // First try a minimal update to test RLS
+  const { data: testData, error: testError } = await supabase
+    .from('profiles')
+    .update({ updated_at: new Date().toISOString() })
+    .eq('id', userId)
+    .select()
+    .single();
+
+  console.log(
+    'Minimal update test:',
+    JSON.stringify({ testData, testError }),
+  );
+
+  // Now try the full upsert
   const payload = {
     id: userId,
     ...updates,
     updated_at: new Date().toISOString(),
   };
-  console.log('upsert payload:', JSON.stringify(payload));
+
+  console.log('Full upsert payload:', JSON.stringify(payload));
+
   const { data, error } = await supabase
     .from('profiles')
     .upsert(payload, { onConflict: 'id' })
     .select()
     .single();
-  if (error) {
-    console.error('Supabase upsert error:', JSON.stringify(error));
-    throw error;
-  }
+
+  console.log('Full upsert result:', JSON.stringify({ data, error }));
+
+  if (error) throw error;
   return data as Profile;
 };
 

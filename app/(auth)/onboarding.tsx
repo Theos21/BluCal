@@ -581,7 +581,7 @@ function mapActivityToDb(id: string | null): ActivityLevel | null {
 export default function Onboarding() {
   const t = useTheme();
   const toast = useToast();
-  const { user, refreshProfile } = useAuth();
+  const { user, profile, refreshProfile } = useAuth();
   const [step, setStep] = useState(0);
   const [saving, setSaving] = useState(false);
   const [healthAvailable, setHealthAvailable] = useState(false);
@@ -641,7 +641,12 @@ export default function Onboarding() {
   }, [step, checkmarkScale, checkmarkOpacity, contentOpacity]);
 
   const [goal, setGoal] = useState<string | null>(null);
-  const [name, setName] = useState('');
+  const [name, setName] = useState(profile?.name ?? '');
+
+  useEffect(() => {
+    if (profile?.name && !name) setName(profile.name);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [profile?.name]);
   const [sex, setSex] = useState<Sex | null>(null);
   const [age, setAge] = useState('');
   const [isMetric, setIsMetric] = useState(false);
@@ -722,8 +727,7 @@ export default function Onboarding() {
       const ageNum = Number(age);
       const birthday =
         Number.isFinite(ageNum) && ageNum > 0 ? birthdayFromAge(ageNum) : null;
-      const profileData = {
-        name,
+      const profileData: Record<string, unknown> = {
         biological_sex: mapSexToDb(sex),
         birthday,
         height_cm: Number.isFinite(heightCmValue) ? heightCmValue : null,
@@ -734,6 +738,9 @@ export default function Onboarding() {
         is_metric: isMetric,
         pace,
       };
+      if (name.trim() && !profile?.name) {
+        profileData.name = name.trim();
+      }
       try {
         console.log(
           'Attempting upsert with:',

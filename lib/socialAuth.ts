@@ -1,5 +1,4 @@
 import * as AppleAuthentication from 'expo-apple-authentication';
-import * as Linking from 'expo-linking';
 import * as WebBrowser from 'expo-web-browser';
 import { Platform } from 'react-native';
 import { supabase } from './supabase';
@@ -63,29 +62,29 @@ export const signInWithApple = async (): Promise<void> => {
 // This sidesteps client-side nonce handling entirely — Supabase performs
 // the nonce flow with Google on its end.
 export const signInWithGoogle = async (): Promise<void> => {
-  const redirectTo = Linking.createURL('/');
+  const redirectTo = 'blucal:///';
 
   const { data, error } = await supabase.auth.signInWithOAuth({
     provider: 'google',
     options: {
       redirectTo,
       skipBrowserRedirect: true,
-      queryParams: {
-        access_type: 'offline',
-        prompt: 'consent',
-      },
     },
   });
+
   if (error) throw error;
-  if (!data?.url) throw new Error('No OAuth URL returned from Supabase');
+  if (!data.url) throw new Error('No OAuth URL returned');
 
   const result = await WebBrowser.openAuthSessionAsync(data.url, redirectTo);
-  // User dismissed/cancelled the browser — return silently. Other social
-  // handlers follow the same convention.
-  if (result.type !== 'success') return;
 
-  const { error: exchangeError } = await supabase.auth.exchangeCodeForSession(
-    result.url,
-  );
-  if (exchangeError) throw exchangeError;
+  if (result.type === 'success' && result.url) {
+    const { data: sessionData, error: sessionError } =
+      await supabase.auth.exchangeCodeForSession(result.url);
+    if (sessionError) throw sessionError;
+    if (!sessionData.session) throw new Error('No session returned');
+  } else if (result.type === 'cancel' || result.type === 'dismiss') {
+    return;
+  } else {
+    throw new Error('Google sign in failed');
+  }
 };

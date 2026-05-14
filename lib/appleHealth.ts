@@ -47,6 +47,7 @@ const safePromise = <T>(
 export const isAvailable = (): Promise<boolean> =>
   safePromise<boolean>((resolve) => {
     AppleHealthKit.isAvailable((err, available) => {
+      console.log('HealthKit isAvailable:', available, 'error:', err);
       resolve(!err && Boolean(available));
     });
   }, false);

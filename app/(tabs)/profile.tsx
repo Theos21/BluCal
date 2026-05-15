@@ -623,6 +623,7 @@ export default function Profile() {
   const [showPwd, setShowPwd] = useState(false);
   const [savingPwd, setSavingPwd] = useState(false);
   const [pwdError, setPwdError] = useState<string | null>(null);
+  const [showCitations, setShowCitations] = useState(false);
 
   const provider = user?.app_metadata?.provider;
   const isSocialUser = provider === 'apple' || provider === 'google';
@@ -1235,6 +1236,11 @@ export default function Profile() {
             icon="document-outline"
             label="Terms of service"
             onPress={handleTOS}
+          />
+          <SettingsRow
+            icon="document-text-outline"
+            label="Sources & Citations"
+            onPress={() => setShowCitations(true)}
             isLast
           />
         </Section>
@@ -1478,6 +1484,256 @@ export default function Profile() {
             </Pressable>
           </Pressable>
         </Pressable>
+      </Modal>
+
+      <Modal
+        visible={showCitations}
+        animationType="slide"
+        presentationStyle="pageSheet"
+        onRequestClose={() => setShowCitations(false)}
+      >
+        <View style={{ flex: 1, backgroundColor: t.bg }}>
+          <View
+            style={{
+              flexDirection: 'row',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              padding: space.lg,
+              paddingTop: space.xl,
+            }}
+          >
+            <Text style={[typo.title2, { color: t.text, fontWeight: '700' }]}>
+              Sources & Citations
+            </Text>
+            <Pressable
+              hitSlop={8}
+              onPress={() => setShowCitations(false)}
+              style={({ pressed }) => ({ opacity: pressed ? 0.6 : 1 })}
+            >
+              <Ionicons name="close-circle" size={28} color={t.textTer} />
+            </Pressable>
+          </View>
+          <ScrollView
+            style={{ flex: 1 }}
+            contentContainerStyle={{ padding: space.lg, gap: space.lg }}
+            showsVerticalScrollIndicator={false}
+          >
+            {/* Calorie calculation */}
+            <View
+              style={{
+                backgroundColor: t.surface,
+                borderRadius: radius.lg,
+                padding: space.md,
+              }}
+            >
+              <Text
+                style={[
+                  typo.subhead,
+                  { color: t.text, fontWeight: '700', marginBottom: space.xs },
+                ]}
+              >
+                Calorie Target Calculation
+              </Text>
+              <Text
+                style={[
+                  typo.caption1,
+                  { color: t.textSec, marginBottom: space.sm },
+                ]}
+              >
+                BluCal uses the Mifflin-St Jeor equation to calculate your
+                Basal Metabolic Rate (BMR), then multiplies by an activity
+                factor to determine your Total Daily Energy Expenditure (TDEE).
+              </Text>
+              <Pressable
+                onPress={() =>
+                  Linking.openURL('https://pubmed.ncbi.nlm.nih.gov/2305711/')
+                }
+              >
+                <Text style={[typo.caption1, { color: t.primary }]}>
+                  Mifflin MD, et al. "A new predictive equation for resting
+                  energy expenditure in healthy individuals." American Journal
+                  of Clinical Nutrition, 1990. PubMed: 2305711
+                </Text>
+              </Pressable>
+            </View>
+
+            {/* Protein recommendations */}
+            <View
+              style={{
+                backgroundColor: t.surface,
+                borderRadius: radius.lg,
+                padding: space.md,
+              }}
+            >
+              <Text
+                style={[
+                  typo.subhead,
+                  { color: t.text, fontWeight: '700', marginBottom: space.xs },
+                ]}
+              >
+                Protein Recommendations
+              </Text>
+              <Text
+                style={[
+                  typo.caption1,
+                  { color: t.textSec, marginBottom: space.sm },
+                ]}
+              >
+                Protein targets are based on body weight recommendations from
+                sports nutrition research, ranging from 0.7-1.0g per pound of
+                body weight depending on goal.
+              </Text>
+              <Pressable
+                onPress={() =>
+                  Linking.openURL('https://pubmed.ncbi.nlm.nih.gov/28698222/')
+                }
+              >
+                <Text style={[typo.caption1, { color: t.primary }]}>
+                  Morton RW, et al. "A systematic review, meta-analysis and
+                  meta-regression of the effect of protein supplementation on
+                  resistance training-induced gains in muscle mass." British
+                  Journal of Sports Medicine, 2018. PubMed: 28698222
+                </Text>
+              </Pressable>
+            </View>
+
+            {/* Weight loss pace */}
+            <View
+              style={{
+                backgroundColor: t.surface,
+                borderRadius: radius.lg,
+                padding: space.md,
+              }}
+            >
+              <Text
+                style={[
+                  typo.subhead,
+                  { color: t.text, fontWeight: '700', marginBottom: space.xs },
+                ]}
+              >
+                Calorie Deficit & Weight Loss Rate
+              </Text>
+              <Text
+                style={[
+                  typo.caption1,
+                  { color: t.textSec, marginBottom: space.sm },
+                ]}
+              >
+                A deficit of approximately 3,500 calories results in roughly 1
+                pound of fat loss. BluCal's pace options (0.5, 1.0, and 1.5
+                lbs/week) are based on this established principle.
+              </Text>
+              <Pressable
+                onPress={() =>
+                  Linking.openURL(
+                    'https://www.niddk.nih.gov/health-information/weight-management',
+                  )
+                }
+              >
+                <Text style={[typo.caption1, { color: t.primary }]}>
+                  National Institute of Diabetes and Digestive and Kidney
+                  Diseases (NIDDK). "Healthy Eating & Physical Activity for
+                  Life." U.S. Department of Health and Human Services.
+                </Text>
+              </Pressable>
+            </View>
+
+            {/* Macro split */}
+            <View
+              style={{
+                backgroundColor: t.surface,
+                borderRadius: radius.lg,
+                padding: space.md,
+              }}
+            >
+              <Text
+                style={[
+                  typo.subhead,
+                  { color: t.text, fontWeight: '700', marginBottom: space.xs },
+                ]}
+              >
+                Macronutrient Distribution
+              </Text>
+              <Text
+                style={[
+                  typo.caption1,
+                  { color: t.textSec, marginBottom: space.sm },
+                ]}
+              >
+                Carbohydrate and fat targets are based on USDA Dietary
+                Guidelines acceptable macronutrient distribution ranges (AMDR).
+              </Text>
+              <Pressable
+                onPress={() =>
+                  Linking.openURL('https://www.dietaryguidelines.gov')
+                }
+              >
+                <Text style={[typo.caption1, { color: t.primary }]}>
+                  U.S. Department of Agriculture and U.S. Department of Health
+                  and Human Services. Dietary Guidelines for Americans,
+                  2020-2025. dietaryguidelines.gov
+                </Text>
+              </Pressable>
+            </View>
+
+            {/* Water intake */}
+            <View
+              style={{
+                backgroundColor: t.surface,
+                borderRadius: radius.lg,
+                padding: space.md,
+              }}
+            >
+              <Text
+                style={[
+                  typo.subhead,
+                  { color: t.text, fontWeight: '700', marginBottom: space.xs },
+                ]}
+              >
+                Water Intake Recommendation
+              </Text>
+              <Text
+                style={[
+                  typo.caption1,
+                  { color: t.textSec, marginBottom: space.sm },
+                ]}
+              >
+                The default 80 oz/day water goal is based on general hydration
+                guidelines from the National Academies of Sciences.
+              </Text>
+              <Pressable
+                onPress={() =>
+                  Linking.openURL(
+                    'https://www.nationalacademies.org/our-work/dietary-reference-intakes-for-water-potassium-sodium-chloride-and-sulfate',
+                  )
+                }
+              >
+                <Text style={[typo.caption1, { color: t.primary }]}>
+                  National Academies of Sciences, Engineering, and Medicine.
+                  "Dietary Reference Intakes for Water, Potassium, Sodium,
+                  Chloride, and Sulfate." National Academies Press, 2005.
+                </Text>
+              </Pressable>
+            </View>
+
+            {/* Disclaimer */}
+            <View
+              style={{
+                backgroundColor: t.surface2,
+                borderRadius: radius.lg,
+                padding: space.md,
+              }}
+            >
+              <Text style={[typo.caption1, { color: t.textSec }]}>
+                BluCal is not a medical application. The information provided
+                is for general wellness purposes only and is not a substitute
+                for professional medical advice. Always consult a qualified
+                healthcare provider before making significant changes to your
+                diet.
+              </Text>
+            </View>
+          </ScrollView>
+        </View>
       </Modal>
 
       <Toast

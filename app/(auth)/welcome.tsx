@@ -12,6 +12,7 @@ import Svg, { Circle, Path } from 'react-native-svg';
 import * as AppleAuthentication from 'expo-apple-authentication';
 import { radius, space, type as typo, useTheme, type Theme } from '../../lib/theme';
 import { signInWithApple, signInWithGoogle } from '../../lib/socialAuth';
+import { BluCalWordmark } from '../../components/BluCalWordmark';
 
 function LogoMark({ size, color }: { size: number; color: string }) {
   return (
@@ -157,18 +158,9 @@ export default function Welcome() {
         }}
       >
         <LogoMark size={80} color={t.primary} />
-        <Text
-          style={[
-            typo.largeTitle,
-            {
-              color: t.primary,
-              marginTop: space.lg,
-              letterSpacing: -0.5,
-            },
-          ]}
-        >
-          BluCal
-        </Text>
+        <View style={{ marginTop: space.lg }}>
+          <BluCalWordmark size={34} />
+        </View>
         <Text
           style={[
             typo.subhead,

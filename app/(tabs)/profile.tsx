@@ -41,6 +41,7 @@ import {
   sendTestNotification,
 } from '../../lib/notifications';
 import Toast from '../../components/Toast';
+import { BluCalWordmark } from '../../components/BluCalWordmark';
 import { useToast } from '../../lib/useToast';
 import type { Goal, Pace, WeightEntry } from '../../lib/types';
 
@@ -1271,18 +1272,20 @@ export default function Profile() {
           <Text style={[typo.subheadEm, { color: t.danger }]}>Sign out</Text>
         </Pressable>
 
-        <Text
-          style={[
-            typo.caption1,
-            {
-              color: t.textTer,
-              textAlign: 'center',
-              marginTop: space.xl,
-            },
-          ]}
+        <View
+          style={{
+            flexDirection: 'row',
+            alignItems: 'baseline',
+            justifyContent: 'center',
+            gap: 6,
+            marginTop: space.xl,
+          }}
         >
-          {`BluCal v${APP_VERSION}`}
-        </Text>
+          <BluCalWordmark size={14} />
+          <Text style={[typo.caption1, { color: t.textTer }]}>
+            {`v${APP_VERSION}`}
+          </Text>
+        </View>
       </ScrollView>
 
       <TimePickerSheet

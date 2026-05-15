@@ -42,6 +42,8 @@ const OVERLAY_COLOR = 'rgba(0,0,0,0.6)';
 const CONTROL_BG = 'rgba(0,0,0,0.5)';
 const TIP_BG = 'rgba(0,0,0,0.75)';
 const TIP_SUBTEXT_COLOR = 'rgba(255,255,255,0.7)';
+const GUIDE_BORDER_COLOR = 'rgba(255,255,255,0.6)';
+const GUIDE_CANCEL_BG = 'rgba(255,255,255,0.2)';
 
 const formatFoodName = (name: string): string => {
   if (!name) return '';
@@ -684,6 +686,7 @@ export default function BarcodeScanner() {
   const [lookingUp, setLookingUp] = useState(false);
   const [saving, setSaving] = useState(false);
   const [scanningLabel, setScanningLabel] = useState(false);
+  const [showLabelGuide, setShowLabelGuide] = useState(false);
 
   const cameraRef = useRef<CameraView>(null);
 
@@ -753,8 +756,16 @@ export default function BarcodeScanner() {
     setLookingUp(false);
   };
 
-  const handleScanNutritionLabel = async () => {
-    if (scanningLabel) return;
+  const handleScanNutritionLabel = () => {
+    // Close the bottom sheet so the camera is fully visible, then show the
+    // aim-guidance overlay. The capture itself happens in captureNutritionLabel.
+    setScannedProduct(null);
+    setNotFound(false);
+    setShowLabelGuide(true);
+  };
+
+  const captureNutritionLabel = async () => {
+    setShowLabelGuide(false);
     setScanningLabel(true);
     try {
       const photo = await cameraRef.current?.takePictureAsync({
@@ -764,13 +775,13 @@ export default function BarcodeScanner() {
       if (!photo?.base64) throw new Error('No image');
       toast.show('Reading nutrition label…', 'info');
       const result = await scanNutritionLabel(photo.base64, 'image/jpeg');
-      // A label scan always routes to the custom-food form pre-filled, so the
-      // user can confirm the product name before the food is saved.
+      // A label scan routes to the custom-food form pre-filled, so the user
+      // can confirm the product name before the food is saved.
       router.replace({
         pathname: '/custom-food',
         params: {
           fromLabelScan: '1',
-          prefillName: result.name,
+          prefillName: result.name !== 'Scanned Food' ? result.name : '',
           prefillServingSize: String(result.serving_size_g),
           prefillCal: String(result.calories),
           prefillProtein: String(result.protein_g),
@@ -788,6 +799,8 @@ export default function BarcodeScanner() {
         'Could not read label. Try again with better lighting.',
         'error',
       );
+      // Bring the guide back so the user can retry.
+      setShowLabelGuide(true);
     } finally {
       setScanningLabel(false);
     }
@@ -904,7 +917,11 @@ export default function BarcodeScanner() {
             'qr',
           ],
         }}
-        onBarcodeScanned={sheetVisible || lookingUp ? undefined : handleBarcodeScanned}
+        onBarcodeScanned={
+          sheetVisible || lookingUp || showLabelGuide || scanningLabel
+            ? undefined
+            : handleBarcodeScanned
+        }
       />
 
       {/* dark overlay strips around the frame */}
@@ -1057,34 +1074,6 @@ export default function BarcodeScanner() {
         </View>
       )}
 
-      {/* nutrition-label scan tip */}
-      {scanningLabel && (
-        <View
-          pointerEvents="none"
-          style={{
-            position: 'absolute',
-            bottom: 160,
-            left: 20,
-            right: 20,
-            backgroundColor: TIP_BG,
-            borderRadius: 14,
-            padding: 14,
-            alignItems: 'center',
-          }}
-        >
-          <Text
-            style={[typo.subhead, { color: t.textOnPrim, fontWeight: '600' }]}
-          >
-            Point at the Nutrition Facts panel
-          </Text>
-          <Text
-            style={[typo.caption1, { color: TIP_SUBTEXT_COLOR, marginTop: 4 }]}
-          >
-            Make sure the entire label is visible and well lit
-          </Text>
-        </View>
-      )}
-
       {/* bottom sheet */}
       <Animated.View
         pointerEvents={sheetVisible ? 'auto' : 'none'}
@@ -1129,6 +1118,117 @@ export default function BarcodeScanner() {
           </ScrollView>
         </KeyboardAvoidingView>
       </Animated.View>
+
+      {/* nutrition-label aim guidance */}
+      {showLabelGuide && (
+        <View
+          style={{
+            position: 'absolute',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            zIndex: 30,
+            alignItems: 'center',
+            justifyContent: 'flex-end',
+            paddingBottom: 60,
+          }}
+        >
+          {/* Top instruction banner */}
+          <View
+            style={{
+              position: 'absolute',
+              top: 100,
+              left: 20,
+              right: 20,
+              backgroundColor: TIP_BG,
+              borderRadius: 16,
+              padding: 16,
+              alignItems: 'center',
+              gap: 8,
+            }}
+          >
+            <Ionicons
+              name="document-text-outline"
+              size={28}
+              color={t.textOnPrim}
+            />
+            <Text
+              style={[
+                typo.headline,
+                { color: t.textOnPrim, fontWeight: '700', textAlign: 'center' },
+              ]}
+            >
+              Point at the Nutrition Facts panel
+            </Text>
+            <Text
+              style={[
+                typo.footnote,
+                { color: TIP_SUBTEXT_COLOR, textAlign: 'center' },
+              ]}
+            >
+              Make sure the entire label is visible and well lit, then tap the
+              button below
+            </Text>
+          </View>
+
+          {/* Viewfinder guide box */}
+          <View
+            style={{
+              position: 'absolute',
+              top: '30%',
+              left: 40,
+              right: 40,
+              height: 200,
+              borderRadius: 12,
+              borderWidth: 2,
+              borderColor: GUIDE_BORDER_COLOR,
+              borderStyle: 'dashed',
+            }}
+          />
+
+          {/* Action buttons */}
+          <View
+            style={{
+              flexDirection: 'row',
+              gap: 12,
+              paddingHorizontal: 20,
+              width: '100%',
+            }}
+          >
+            <Pressable
+              onPress={() => setShowLabelGuide(false)}
+              style={({ pressed }) => ({
+                flex: 1,
+                backgroundColor: GUIDE_CANCEL_BG,
+                borderRadius: 16,
+                padding: 16,
+                alignItems: 'center',
+                opacity: pressed ? 0.6 : 1,
+              })}
+            >
+              <Text style={[typo.headline, { color: t.textOnPrim }]}>
+                Cancel
+              </Text>
+            </Pressable>
+            <Pressable
+              onPress={captureNutritionLabel}
+              style={({ pressed }) => ({
+                flex: 2,
+                backgroundColor: t.primary,
+                borderRadius: 16,
+                padding: 16,
+                alignItems: 'center',
+                opacity: pressed ? 0.85 : 1,
+              })}
+            >
+              <Text style={[typo.headline, { color: t.textOnPrim }]}>
+                Scan label
+              </Text>
+            </Pressable>
+          </View>
+        </View>
+      )}
 
       <Toast
         message={toast.message}

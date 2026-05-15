@@ -97,8 +97,9 @@ Deno.serve(async (req) => {
     }
 
     if (mode === 'barcode') {
-      // Normalize to 13 digits by padding with leading zero if 12 digits
-      const ean = barcode.length === 12 ? `0${barcode}` : barcode;
+      const cleanBarcode = barcode.trim().replace(/\D/g, '');
+      const ean = cleanBarcode.length === 12 ? `0${cleanBarcode}` : cleanBarcode;
+      console.log('Barcode lookup:', { original: barcode, clean: cleanBarcode, ean });
 
       const barcodeData = await callFatSecret(token, {
         method: 'food.find_id_for_barcode',
@@ -117,8 +118,7 @@ Deno.serve(async (req) => {
         food_id: foodId,
       });
 
-      const result = mapFood(foodData.food, barcode);
-
+      const result = mapFood(foodData.food, cleanBarcode);
       return new Response(JSON.stringify({ result }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });

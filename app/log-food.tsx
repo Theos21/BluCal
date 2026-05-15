@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Animated,
+  Modal,
   Pressable,
   ScrollView,
   Text,
@@ -579,6 +580,10 @@ export default function LogFood() {
   const [recentFoods, setRecentFoods] = useState<FoodEntry[]>([]);
   const [myRecipes, setMyRecipes] = useState<RecipeWithMacros[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loggingRecipe, setLoggingRecipe] = useState<RecipeWithMacros | null>(
+    null,
+  );
+  const [recipeServings, setRecipeServings] = useState('1');
 
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<FoodSearchResult[]>([]);
@@ -763,20 +768,28 @@ export default function LogFood() {
     onAdd: () => void handleReLog(entry),
   }));
 
-  const handleLogRecipe = async (recipe: RecipeWithMacros) => {
-    if (!user) return;
+  const handleLogRecipe = (recipe: RecipeWithMacros) => {
+    setLoggingRecipe(recipe);
+    setRecipeServings('1');
+  };
+
+  const handleConfirmLogRecipe = async () => {
+    if (!loggingRecipe || !user) return;
+    const servings = Number(recipeServings) || 1;
     try {
       await addFoodEntry({
         user_id: user.id,
         logged_at: new Date().toISOString(),
-        name: recipe.name,
-        portion_description: `1 serving (${recipe.servings} servings total)`,
-        quantity: 1,
+        name: loggingRecipe.name,
+        portion_description: `${servings} serving${servings !== 1 ? 's' : ''}`,
+        quantity: servings,
         unit: 'serving',
-        calories: recipe.perServing.calories,
-        protein_g: recipe.perServing.protein_g,
-        carbs_g: recipe.perServing.carbs_g,
-        fat_g: recipe.perServing.fat_g,
+        calories: Math.round(loggingRecipe.perServing.calories * servings),
+        protein_g:
+          Math.round(loggingRecipe.perServing.protein_g * servings * 10) / 10,
+        carbs_g:
+          Math.round(loggingRecipe.perServing.carbs_g * servings * 10) / 10,
+        fat_g: Math.round(loggingRecipe.perServing.fat_g * servings * 10) / 10,
         fiber_g: 0,
         sugar_g: 0,
         sodium_mg: 0,
@@ -786,11 +799,15 @@ export default function LogFood() {
         barcode: null,
         source: 'recipe',
       });
-      sessionState.setJustLoggedFood(recipe.name);
-      toast.show(`Added: ${recipe.name}`, 'success');
+      sessionState.setJustLoggedFood(loggingRecipe.name);
+      toast.show(
+        `${loggingRecipe.name} logged for ${servings} serving${servings !== 1 ? 's' : ''}.`,
+        'success',
+      );
+      setLoggingRecipe(null);
       setTimeout(() => router.back(), 800);
     } catch {
-      toast.show('Could not add recipe. Try again.', 'error');
+      toast.show('Could not log recipe. Try again.', 'error');
     }
   };
 
@@ -802,7 +819,7 @@ export default function LogFood() {
     protein_g: Number(recipe.perServing.protein_g),
     carbs_g: Number(recipe.perServing.carbs_g),
     fat_g: Number(recipe.perServing.fat_g),
-    onAdd: () => void handleLogRecipe(recipe),
+    onAdd: () => handleLogRecipe(recipe),
   }));
 
   const isSearching = searchQuery.trim().length > 0;
@@ -984,6 +1001,200 @@ export default function LogFood() {
           <Ionicons name="chevron-forward" size={16} color={t.textTer} />
         </Pressable>
       </ScrollView>
+
+      {/* Recipe serving customization sheet */}
+      <Modal
+        visible={!!loggingRecipe}
+        animationType="slide"
+        presentationStyle="formSheet"
+        onRequestClose={() => setLoggingRecipe(null)}
+      >
+        <View style={{ flex: 1, backgroundColor: t.bg, padding: space.lg }}>
+          <Text
+            style={[
+              typo.title2,
+              { color: t.text, fontWeight: '700', marginBottom: space.xs },
+            ]}
+          >
+            Log Recipe
+          </Text>
+          <Text
+            style={[typo.subhead, { color: t.textSec, marginBottom: space.xl }]}
+          >
+            {loggingRecipe?.name}
+          </Text>
+
+          <Text
+            style={[
+              typo.subhead,
+              { color: t.text, fontWeight: '600', marginBottom: space.sm },
+            ]}
+          >
+            How many servings?
+          </Text>
+
+          {/* Serving stepper */}
+          <View
+            style={{
+              flexDirection: 'row',
+              alignItems: 'center',
+              gap: space.lg,
+              marginBottom: space.xl,
+              backgroundColor: t.surface,
+              borderRadius: radius.lg,
+              padding: space.md,
+            }}
+          >
+            <Pressable
+              onPress={() =>
+                setRecipeServings((s) =>
+                  String(Math.max(0.25, Number(s) - 0.25)),
+                )
+              }
+              style={({ pressed }) => ({
+                width: 44,
+                height: 44,
+                borderRadius: 22,
+                backgroundColor: t.surface2,
+                alignItems: 'center',
+                justifyContent: 'center',
+                opacity: pressed ? 0.6 : 1,
+              })}
+            >
+              <Ionicons name="remove" size={20} color={t.text} />
+            </Pressable>
+            <TextInput
+              style={{
+                flex: 1,
+                textAlign: 'center',
+                fontSize: 28,
+                fontWeight: '800',
+                color: t.text,
+              }}
+              keyboardType="numeric"
+              value={recipeServings}
+              onChangeText={setRecipeServings}
+              selectTextOnFocus
+            />
+            <Pressable
+              onPress={() =>
+                setRecipeServings((s) => String(Number(s) + 0.25))
+              }
+              style={({ pressed }) => ({
+                width: 44,
+                height: 44,
+                borderRadius: 22,
+                backgroundColor: t.surface2,
+                alignItems: 'center',
+                justifyContent: 'center',
+                opacity: pressed ? 0.6 : 1,
+              })}
+            >
+              <Ionicons name="add" size={20} color={t.text} />
+            </Pressable>
+          </View>
+
+          {/* Macro preview for the selected servings */}
+          {loggingRecipe &&
+            (() => {
+              const s = Number(recipeServings) || 1;
+              const totalCal = Math.round(
+                loggingRecipe.perServing.calories * s,
+              );
+              const totalP =
+                Math.round(loggingRecipe.perServing.protein_g * s * 10) / 10;
+              const totalC =
+                Math.round(loggingRecipe.perServing.carbs_g * s * 10) / 10;
+              const totalF =
+                Math.round(loggingRecipe.perServing.fat_g * s * 10) / 10;
+              return (
+                <View
+                  style={{
+                    backgroundColor: t.surface,
+                    borderRadius: radius.lg,
+                    padding: space.md,
+                    flexDirection: 'row',
+                    justifyContent: 'space-around',
+                    marginBottom: space.xl,
+                  }}
+                >
+                  <View style={{ alignItems: 'center' }}>
+                    <Text
+                      style={[
+                        typo.title3,
+                        { color: t.text, fontWeight: '700' },
+                      ]}
+                    >
+                      {totalCal}
+                    </Text>
+                    <Text style={[typo.caption2, { color: t.textTer }]}>
+                      cal
+                    </Text>
+                  </View>
+                  <View style={{ alignItems: 'center' }}>
+                    <Text
+                      style={[
+                        typo.title3,
+                        { color: t.primary, fontWeight: '700' },
+                      ]}
+                    >
+                      {totalP}g
+                    </Text>
+                    <Text style={[typo.caption2, { color: t.textTer }]}>
+                      protein
+                    </Text>
+                  </View>
+                  <View style={{ alignItems: 'center' }}>
+                    <Text
+                      style={[
+                        typo.title3,
+                        { color: t.warn, fontWeight: '700' },
+                      ]}
+                    >
+                      {totalC}g
+                    </Text>
+                    <Text style={[typo.caption2, { color: t.textTer }]}>
+                      carbs
+                    </Text>
+                  </View>
+                  <View style={{ alignItems: 'center' }}>
+                    <Text
+                      style={[
+                        typo.title3,
+                        { color: t.teal, fontWeight: '700' },
+                      ]}
+                    >
+                      {totalF}g
+                    </Text>
+                    <Text style={[typo.caption2, { color: t.textTer }]}>
+                      fat
+                    </Text>
+                  </View>
+                </View>
+              );
+            })()}
+
+          <View style={{ flex: 1 }} />
+
+          {/* Log button */}
+          <Pressable
+            onPress={handleConfirmLogRecipe}
+            style={({ pressed }) => ({
+              backgroundColor: t.primary,
+              borderRadius: radius.lg,
+              padding: space.md,
+              alignItems: 'center',
+              opacity: pressed ? 0.85 : 1,
+            })}
+          >
+            <Text
+              style={[typo.subhead, { color: t.textOnPrim, fontWeight: '700' }]}
+            >
+              {`Log ${recipeServings} serving${Number(recipeServings) !== 1 ? 's' : ''}`}
+            </Text>
+          </Pressable>
+        </View>
+      </Modal>
 
       <Toast
         message={toast.message}

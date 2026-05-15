@@ -1,7 +1,8 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  FlatList,
   KeyboardAvoidingView,
   Modal,
   Platform,
@@ -20,6 +21,7 @@ import { useToast } from '../lib/useToast';
 import { useAuth } from '../lib/AuthContext';
 import { addRecipe } from '../lib/db';
 import { importRecipeFromUrl } from '../lib/recipeImport';
+import { searchFoods, type FoodSearchResult } from '../lib/foodSearch';
 
 const YIELD_UNITS = ['g', 'oz', 'ml', 'cups', 'pieces'] as const;
 
@@ -187,6 +189,19 @@ export default function RecipeBuilder() {
   const [importUrl, setImportUrl] = useState('');
   const [importing, setImporting] = useState(false);
 
+  const [showIngredientSearch, setShowIngredientSearch] = useState(false);
+  const [ingredientQuery, setIngredientQuery] = useState('');
+  const [ingredientResults, setIngredientResults] = useState<
+    FoodSearchResult[]
+  >([]);
+  const [searchingIngredients, setSearchingIngredients] = useState(false);
+  const [selectedIngredientFood, setSelectedIngredientFood] =
+    useState<FoodSearchResult | null>(null);
+  const [ingredientQuantity, setIngredientQuantity] = useState('100');
+  const [ingredientUnit, setIngredientUnit] = useState('g');
+  const [showIngredientQuantity, setShowIngredientQuantity] = useState(false);
+  const searchTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   const totals = ingredients.reduce(
     (acc, i) => ({
       cal: acc.cal + i.cal,
@@ -293,6 +308,71 @@ export default function RecipeBuilder() {
         },
       ],
     );
+  };
+
+  // Scale a searched food's per-serving macros to the chosen quantity/unit.
+  // Used by both the live preview and handleConfirmIngredient so they agree.
+  const ingredientScaleFactor = (
+    food: FoodSearchResult,
+    qty: number,
+    unit: string,
+  ): number => {
+    if (unit === 'serving') return qty;
+    const base = food.serving_size || 100;
+    if (unit === 'oz') return (qty * 28.3495) / base;
+    return qty / base;
+  };
+
+  const handleIngredientSearch = (text: string) => {
+    setIngredientQuery(text);
+    if (searchTimeout.current) clearTimeout(searchTimeout.current);
+    if (!text.trim()) {
+      setIngredientResults([]);
+      return;
+    }
+    searchTimeout.current = setTimeout(async () => {
+      setSearchingIngredients(true);
+      try {
+        const results = await searchFoods(text);
+        setIngredientResults(results);
+      } catch {
+        toast.show('Search failed. Try again.', 'error');
+      } finally {
+        setSearchingIngredients(false);
+      }
+    }, 500);
+  };
+
+  const handleSelectIngredient = (food: FoodSearchResult) => {
+    setSelectedIngredientFood(food);
+    setIngredientQuantity('100');
+    setIngredientUnit('g');
+    setShowIngredientQuantity(true);
+  };
+
+  const handleConfirmIngredient = () => {
+    if (!selectedIngredientFood) return;
+    const qty = Number(ingredientQuantity) || 100;
+    const factor = ingredientScaleFactor(
+      selectedIngredientFood,
+      qty,
+      ingredientUnit,
+    );
+    const ingredient: Ingredient = {
+      id: Date.now().toString(),
+      name: selectedIngredientFood.name,
+      quantity: qty,
+      unit: ingredientUnit,
+      cal: Math.round(selectedIngredientFood.calories * factor),
+      p: Math.round(selectedIngredientFood.protein_g * factor * 10) / 10,
+      c: Math.round(selectedIngredientFood.carbs_g * factor * 10) / 10,
+      f: Math.round(selectedIngredientFood.fat_g * factor * 10) / 10,
+    };
+    setIngredients((prev) => [...prev, ingredient]);
+    setShowIngredientQuantity(false);
+    setShowIngredientSearch(false);
+    setIngredientQuery('');
+    setIngredientResults([]);
   };
 
   return (
@@ -586,7 +666,7 @@ export default function RecipeBuilder() {
 
           {/* Add ingredient dashed row */}
           <Pressable
-            onPress={() => router.push('/log-food')}
+            onPress={() => setShowIngredientSearch(true)}
             style={({ pressed }) => ({
               marginHorizontal: space.lg,
               marginTop: space.md,
@@ -799,6 +879,365 @@ export default function RecipeBuilder() {
             </Pressable>
           </Pressable>
         </Pressable>
+      </Modal>
+
+      {/* Ingredient search sheet */}
+      <Modal
+        visible={showIngredientSearch}
+        animationType="slide"
+        presentationStyle="pageSheet"
+        onRequestClose={() => setShowIngredientSearch(false)}
+      >
+        <View style={{ flex: 1, backgroundColor: t.bg }}>
+          {/* Header */}
+          <View
+            style={{
+              flexDirection: 'row',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              padding: space.lg,
+              paddingTop: space.xl,
+            }}
+          >
+            <Text style={[typo.title2, { color: t.text, fontWeight: '700' }]}>
+              Add Ingredient
+            </Text>
+            <Pressable
+              hitSlop={8}
+              onPress={() => {
+                setShowIngredientSearch(false);
+                setIngredientQuery('');
+                setIngredientResults([]);
+              }}
+              style={({ pressed }) => ({ opacity: pressed ? 0.6 : 1 })}
+            >
+              <Ionicons name="close-circle" size={28} color={t.textTer} />
+            </Pressable>
+          </View>
+
+          {/* Search bar */}
+          <View
+            style={{
+              marginHorizontal: space.lg,
+              marginBottom: space.sm,
+              backgroundColor: t.surface,
+              borderRadius: radius.lg,
+              flexDirection: 'row',
+              alignItems: 'center',
+              padding: space.md,
+              gap: space.sm,
+            }}
+          >
+            <Ionicons name="search-outline" size={18} color={t.textTer} />
+            <TextInput
+              style={[typo.body, { flex: 1, color: t.text, padding: 0 }]}
+              placeholder="Search foods…"
+              placeholderTextColor={t.textTer}
+              value={ingredientQuery}
+              onChangeText={handleIngredientSearch}
+              autoFocus
+              returnKeyType="search"
+            />
+            {searchingIngredients && (
+              <ActivityIndicator size="small" color={t.primary} />
+            )}
+          </View>
+
+          {/* Results */}
+          <FlatList
+            style={{ flex: 1 }}
+            data={ingredientResults}
+            keyExtractor={(item) => item.id}
+            keyboardShouldPersistTaps="handled"
+            renderItem={({ item }) => (
+              <Pressable
+                onPress={() => handleSelectIngredient(item)}
+                style={({ pressed }) => ({
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  padding: space.md,
+                  paddingHorizontal: space.lg,
+                  gap: space.md,
+                  backgroundColor: pressed ? t.surface2 : 'transparent',
+                })}
+              >
+                <View
+                  style={{
+                    width: 44,
+                    height: 44,
+                    borderRadius: 12,
+                    backgroundColor: t.primarySoft,
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                  }}
+                >
+                  <Ionicons
+                    name="nutrition-outline"
+                    size={20}
+                    color={t.primary}
+                  />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text
+                    style={[
+                      typo.subhead,
+                      { color: t.text, fontWeight: '600' },
+                    ]}
+                    numberOfLines={1}
+                  >
+                    {item.name}
+                  </Text>
+                  {item.brand && (
+                    <Text style={[typo.caption1, { color: t.textSec }]}>
+                      {item.brand}
+                    </Text>
+                  )}
+                  <View
+                    style={{ flexDirection: 'row', gap: 6, marginTop: 2 }}
+                  >
+                    <Text style={[typo.caption2, { color: t.textTer }]}>
+                      {item.calories} cal
+                    </Text>
+                    <Text style={[typo.caption2, { color: t.primary }]}>
+                      {Math.round(item.protein_g)}g P
+                    </Text>
+                    <Text style={[typo.caption2, { color: t.warn }]}>
+                      {Math.round(item.carbs_g)}g C
+                    </Text>
+                    <Text style={[typo.caption2, { color: t.teal }]}>
+                      {Math.round(item.fat_g)}g F
+                    </Text>
+                  </View>
+                </View>
+                <Ionicons
+                  name="add-circle-outline"
+                  size={24}
+                  color={t.primary}
+                />
+              </Pressable>
+            )}
+            ListEmptyComponent={
+              ingredientQuery.length > 0 && !searchingIngredients ? (
+                <View style={{ alignItems: 'center', padding: space.xl }}>
+                  <Text style={[typo.subhead, { color: t.textTer }]}>
+                    No results found
+                  </Text>
+                </View>
+              ) : null
+            }
+          />
+        </View>
+
+        {/* Quantity selector within the ingredient search */}
+        <Modal
+          visible={showIngredientQuantity}
+          animationType="slide"
+          presentationStyle="formSheet"
+          onRequestClose={() => setShowIngredientQuantity(false)}
+        >
+          <View style={{ flex: 1, backgroundColor: t.bg, padding: space.lg }}>
+            <Text
+              style={[
+                typo.title2,
+                { color: t.text, fontWeight: '700', marginBottom: space.sm },
+              ]}
+            >
+              How much?
+            </Text>
+            {selectedIngredientFood && (
+              <Text
+                style={[
+                  typo.subhead,
+                  { color: t.textSec, marginBottom: space.lg },
+                ]}
+              >
+                {selectedIngredientFood.name}
+              </Text>
+            )}
+
+            {/* Quantity input + unit selector */}
+            <View
+              style={{
+                flexDirection: 'row',
+                gap: space.sm,
+                marginBottom: space.lg,
+              }}
+            >
+              <TextInput
+                style={{
+                  flex: 1,
+                  backgroundColor: t.surface,
+                  borderRadius: radius.lg,
+                  padding: space.md,
+                  color: t.text,
+                  fontSize: 24,
+                  fontWeight: '700',
+                  textAlign: 'center',
+                }}
+                keyboardType="numeric"
+                value={ingredientQuantity}
+                onChangeText={setIngredientQuantity}
+                selectTextOnFocus
+              />
+              <View style={{ flexDirection: 'column', gap: space.xs }}>
+                {['g', 'oz', 'serving'].map((u) => (
+                  <Pressable
+                    key={u}
+                    onPress={() => setIngredientUnit(u)}
+                    style={{
+                      backgroundColor:
+                        ingredientUnit === u ? t.primary : t.surface,
+                      borderRadius: radius.md,
+                      paddingHorizontal: space.md,
+                      paddingVertical: space.sm,
+                    }}
+                  >
+                    <Text
+                      style={[
+                        typo.caption1,
+                        {
+                          color:
+                            ingredientUnit === u ? t.textOnPrim : t.textSec,
+                          fontWeight: '600',
+                        },
+                      ]}
+                    >
+                      {u}
+                    </Text>
+                  </Pressable>
+                ))}
+              </View>
+            </View>
+
+            {/* Live macro preview */}
+            {selectedIngredientFood &&
+              (() => {
+                const qty = Number(ingredientQuantity) || 0;
+                const factor = ingredientScaleFactor(
+                  selectedIngredientFood,
+                  qty,
+                  ingredientUnit,
+                );
+                return (
+                  <View
+                    style={{
+                      backgroundColor: t.surface,
+                      borderRadius: radius.lg,
+                      padding: space.md,
+                      flexDirection: 'row',
+                      justifyContent: 'space-around',
+                      marginBottom: space.lg,
+                    }}
+                  >
+                    <View style={{ alignItems: 'center' }}>
+                      <Text
+                        style={[
+                          typo.title3,
+                          { color: t.text, fontWeight: '700' },
+                        ]}
+                      >
+                        {Math.round(selectedIngredientFood.calories * factor)}
+                      </Text>
+                      <Text style={[typo.caption2, { color: t.textTer }]}>
+                        cal
+                      </Text>
+                    </View>
+                    <View style={{ alignItems: 'center' }}>
+                      <Text
+                        style={[
+                          typo.title3,
+                          { color: t.primary, fontWeight: '700' },
+                        ]}
+                      >
+                        {Math.round(
+                          selectedIngredientFood.protein_g * factor * 10,
+                        ) / 10}
+                        g
+                      </Text>
+                      <Text style={[typo.caption2, { color: t.textTer }]}>
+                        protein
+                      </Text>
+                    </View>
+                    <View style={{ alignItems: 'center' }}>
+                      <Text
+                        style={[
+                          typo.title3,
+                          { color: t.warn, fontWeight: '700' },
+                        ]}
+                      >
+                        {Math.round(
+                          selectedIngredientFood.carbs_g * factor * 10,
+                        ) / 10}
+                        g
+                      </Text>
+                      <Text style={[typo.caption2, { color: t.textTer }]}>
+                        carbs
+                      </Text>
+                    </View>
+                    <View style={{ alignItems: 'center' }}>
+                      <Text
+                        style={[
+                          typo.title3,
+                          { color: t.teal, fontWeight: '700' },
+                        ]}
+                      >
+                        {Math.round(
+                          selectedIngredientFood.fat_g * factor * 10,
+                        ) / 10}
+                        g
+                      </Text>
+                      <Text style={[typo.caption2, { color: t.textTer }]}>
+                        fat
+                      </Text>
+                    </View>
+                  </View>
+                );
+              })()}
+
+            <View style={{ flex: 1 }} />
+
+            {/* Buttons */}
+            <View style={{ flexDirection: 'row', gap: space.sm }}>
+              <Pressable
+                onPress={() => setShowIngredientQuantity(false)}
+                style={({ pressed }) => ({
+                  flex: 1,
+                  backgroundColor: t.surface2,
+                  borderRadius: radius.lg,
+                  padding: space.md,
+                  alignItems: 'center',
+                  opacity: pressed ? 0.6 : 1,
+                })}
+              >
+                <Text
+                  style={[typo.subhead, { color: t.text, fontWeight: '600' }]}
+                >
+                  Back
+                </Text>
+              </Pressable>
+              <Pressable
+                onPress={handleConfirmIngredient}
+                style={({ pressed }) => ({
+                  flex: 2,
+                  backgroundColor: t.primary,
+                  borderRadius: radius.lg,
+                  padding: space.md,
+                  alignItems: 'center',
+                  opacity: pressed ? 0.85 : 1,
+                })}
+              >
+                <Text
+                  style={[
+                    typo.subhead,
+                    { color: t.textOnPrim, fontWeight: '700' },
+                  ]}
+                >
+                  Add to recipe
+                </Text>
+              </Pressable>
+            </View>
+          </View>
+        </Modal>
       </Modal>
 
       <Toast

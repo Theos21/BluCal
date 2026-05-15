@@ -25,7 +25,11 @@ import {
   getRecipesWithMacros,
   type RecipeWithMacros,
 } from '../lib/db';
-import { searchFoods, type FoodSearchResult } from '../lib/foodSearch';
+import {
+  autocompleteFoods,
+  searchFoods,
+  type FoodSearchResult,
+} from '../lib/foodSearch';
 import { sessionState } from '../lib/sessionState';
 import type { FoodEntry } from '../lib/types';
 
@@ -578,6 +582,7 @@ export default function LogFood() {
 
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<FoodSearchResult[]>([]);
+  const [suggestions, setSuggestions] = useState<string[]>([]);
   const [searching, setSearching] = useState(false);
   const searchTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -662,8 +667,16 @@ export default function LogFood() {
     if (searchTimeout.current) clearTimeout(searchTimeout.current);
     if (!text.trim()) {
       setSearchResults([]);
+      setSuggestions([]);
       setSearching(false);
       return;
+    }
+    if (text.trim().length > 1) {
+      autocompleteFoods(text)
+        .then(setSuggestions)
+        .catch(() => setSuggestions([]));
+    } else {
+      setSuggestions([]);
     }
     searchTimeout.current = setTimeout(async () => {
       try {
@@ -833,23 +846,58 @@ export default function LogFood() {
         <QuickActions />
 
         {isSearching ? (
-          searching ? (
-            <View
-              style={{
-                alignItems: 'center',
-                paddingVertical: space.xxxl,
-              }}
-            >
-              <ActivityIndicator color={t.primary} />
-            </View>
-          ) : searchResults.length === 0 ? (
-            <EmptySearchState query={searchQuery.trim()} />
-          ) : (
-            <SearchResultsList
-              results={searchResults}
-              onSelect={handleSelectFood}
-            />
-          )
+          <>
+            {suggestions.length > 0 && searchResults.length === 0 && (
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={{
+                  paddingHorizontal: space.lg,
+                  paddingVertical: space.xs,
+                  gap: space.sm,
+                }}
+              >
+                {suggestions.map((s) => (
+                  <Pressable
+                    key={s}
+                    onPress={() => {
+                      setSearchQuery(s);
+                      handleSearchChange(s);
+                      setSuggestions([]);
+                    }}
+                    style={({ pressed }) => ({
+                      backgroundColor: t.surface2,
+                      borderRadius: radius.pill,
+                      paddingHorizontal: space.md,
+                      paddingVertical: space.xs,
+                      opacity: pressed ? 0.6 : 1,
+                    })}
+                  >
+                    <Text style={[typo.caption1, { color: t.textSec }]}>
+                      {s}
+                    </Text>
+                  </Pressable>
+                ))}
+              </ScrollView>
+            )}
+            {searching ? (
+              <View
+                style={{
+                  alignItems: 'center',
+                  paddingVertical: space.xxxl,
+                }}
+              >
+                <ActivityIndicator color={t.primary} />
+              </View>
+            ) : searchResults.length === 0 ? (
+              <EmptySearchState query={searchQuery.trim()} />
+            ) : (
+              <SearchResultsList
+                results={searchResults}
+                onSelect={handleSelectFood}
+              />
+            )}
+          </>
         ) : loading ? (
           <View
             style={{

@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Animated,
+  Image,
   KeyboardAvoidingView,
   Linking,
   Platform,
@@ -96,6 +97,7 @@ type ServingUnit = 'serving' | 'g' | 'oz';
 type AddPayload = {
   unit: ServingUnit;
   qty: number;
+  portionDescription: string;
   scaled: {
     calories: number;
     protein: number;
@@ -213,26 +215,34 @@ function FoundSheetContent({
   const [quantity, setQuantity] = useState(1);
   const [servingUnit, setServingUnit] = useState<ServingUnit>('serving');
   const [customGrams, setCustomGrams] = useState('');
+  const [selectedServingIdx, setSelectedServingIdx] = useState(0);
+
+  const selectedServing = product.all_servings[selectedServingIdx] ?? null;
+  const baseCals = selectedServing?.calories ?? product.calories;
+  const baseProtein = selectedServing?.protein_g ?? product.protein_g;
+  const baseCarbs = selectedServing?.carbs_g ?? product.carbs_g;
+  const baseFat = selectedServing?.fat_g ?? product.fat_g;
+  const baseGrams = selectedServing?.metric_amount || product.serving_size;
 
   const getScaledMacros = (qty: number, unit: ServingUnit) => {
     if (unit === 'serving') {
       return {
-        calories: Math.round(product.calories * qty),
-        protein: Math.round(product.protein_g * qty * 10) / 10,
-        carbs: Math.round(product.carbs_g * qty * 10) / 10,
-        fat: Math.round(product.fat_g * qty * 10) / 10,
+        calories: Math.round(baseCals * qty),
+        protein: Math.round(baseProtein * qty * 10) / 10,
+        carbs: Math.round(baseCarbs * qty * 10) / 10,
+        fat: Math.round(baseFat * qty * 10) / 10,
         fiber: Math.round(product.fiber_g * qty * 10) / 10,
         sugar: Math.round(product.sugar_g * qty * 10) / 10,
         sodium: Math.round(product.sodium_mg * qty),
       };
     }
     const grams = unit === 'oz' ? qty * 28.3495 : qty;
-    const factor = grams / product.serving_size;
+    const factor = baseGrams > 0 ? grams / baseGrams : 0;
     return {
-      calories: Math.round(product.calories * factor),
-      protein: Math.round(product.protein_g * factor * 10) / 10,
-      carbs: Math.round(product.carbs_g * factor * 10) / 10,
-      fat: Math.round(product.fat_g * factor * 10) / 10,
+      calories: Math.round(baseCals * factor),
+      protein: Math.round(baseProtein * factor * 10) / 10,
+      carbs: Math.round(baseCarbs * factor * 10) / 10,
+      fat: Math.round(baseFat * factor * 10) / 10,
       fiber: Math.round(product.fiber_g * factor * 10) / 10,
       sugar: Math.round(product.sugar_g * factor * 10) / 10,
       sodium: Math.round(product.sodium_mg * factor),
@@ -267,7 +277,7 @@ function FoundSheetContent({
     <View>
       <DragHandle />
 
-      {/* Header: icon bubble + name + brand */}
+      {/* Header: image or icon bubble + name + brand */}
       <View
         style={{
           flexDirection: 'row',
@@ -276,19 +286,32 @@ function FoundSheetContent({
           marginTop: space.lg,
         }}
       >
-        <View
-          style={{
-            width: 56,
-            height: 56,
-            borderRadius: 16,
-            backgroundColor: icon.bg,
-            alignItems: 'center',
-            justifyContent: 'center',
-            flexShrink: 0,
-          }}
-        >
-          <Ionicons name={icon.name} size={28} color={icon.color} />
-        </View>
+        {product.image_url ? (
+          <Image
+            source={{ uri: product.image_url }}
+            style={{
+              width: 80,
+              height: 80,
+              borderRadius: radius.md,
+              backgroundColor: t.surface2,
+            }}
+            resizeMode="contain"
+          />
+        ) : (
+          <View
+            style={{
+              width: 56,
+              height: 56,
+              borderRadius: 16,
+              backgroundColor: icon.bg,
+              alignItems: 'center',
+              justifyContent: 'center',
+              flexShrink: 0,
+            }}
+          >
+            <Ionicons name={icon.name} size={28} color={icon.color} />
+          </View>
+        )}
         <View style={{ flex: 1, minWidth: 0 }}>
           <Text style={[typo.title3, { color: t.text }]} numberOfLines={2}>
             {finalName}
@@ -303,6 +326,44 @@ function FoundSheetContent({
           )}
         </View>
       </View>
+
+      {/* Serving picker — only when multiple options */}
+      {product.all_servings.length > 1 && (
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={{ gap: space.sm, marginTop: space.md }}
+        >
+          {product.all_servings.map((s, i) => {
+            const sel = selectedServingIdx === i;
+            return (
+              <Pressable
+                key={`${s.id}-${i}`}
+                onPress={() => setSelectedServingIdx(i)}
+                style={({ pressed }) => ({
+                  backgroundColor: sel ? t.primary : t.surface2,
+                  borderRadius: radius.pill,
+                  paddingHorizontal: space.md,
+                  paddingVertical: space.xs,
+                  opacity: pressed ? 0.7 : 1,
+                })}
+              >
+                <Text
+                  style={[
+                    typo.caption1,
+                    {
+                      color: sel ? t.textOnPrim : t.textSec,
+                      fontWeight: '600',
+                    },
+                  ]}
+                >
+                  {s.description}
+                </Text>
+              </Pressable>
+            );
+          })}
+        </ScrollView>
+      )}
 
       {/* Macro pills */}
       <View
@@ -339,8 +400,8 @@ function FoundSheetContent({
       <Text
         style={[typo.caption1, { color: t.textTer, marginTop: space.md }]}
       >
-        Per serving ({product.serving_size}
-        {product.serving_unit})
+        Per serving ({baseGrams}
+        {selectedServing?.metric_unit ?? product.serving_unit})
       </Text>
 
       {/* Unit selector */}
@@ -448,7 +509,17 @@ function FoundSheetContent({
       </View>
 
       <Pressable
-        onPress={() => onAdd({ unit: servingUnit, qty, scaled })}
+        onPress={() => {
+          const servingLabel =
+            selectedServing?.description ?? product.serving_description;
+          const portionDescription =
+            servingUnit === 'serving'
+              ? `${quantityLabel} x ${servingLabel}`
+              : servingUnit === 'g'
+                ? `${qty}g`
+                : `${qty}oz`;
+          onAdd({ unit: servingUnit, qty, portionDescription, scaled });
+        }}
         disabled={saving}
         style={({ pressed }) => ({
           marginTop: space.xl,
@@ -601,19 +672,12 @@ export default function BarcodeScanner() {
     if (!user || !scannedProduct || saving) return;
     setSaving(true);
     try {
-      const { unit, qty, scaled } = payload;
-      const grams = unit === 'oz' ? Math.round(qty * 28.3495) : qty;
-      const portion =
-        unit === 'serving'
-          ? `${qty} serving${qty !== 1 ? 's' : ''} (${qty * scannedProduct.serving_size}${scannedProduct.serving_unit})`
-          : unit === 'g'
-            ? `${qty}g`
-            : `${qty}oz (${grams}g)`;
+      const { unit, qty, portionDescription, scaled } = payload;
       await addFoodEntry({
         user_id: user.id,
         logged_at: new Date().toISOString(),
         name: scannedProduct.name,
-        portion_description: portion,
+        portion_description: portionDescription,
         quantity: qty,
         unit,
         calories: scaled.calories,

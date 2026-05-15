@@ -8,7 +8,11 @@ const CLIENT_SECRET = Deno.env.get('FATSECRET_CLIENT_SECRET') ?? '';
 const TOKEN_URL = 'https://oauth.fatsecret.com/connect/token';
 const API_URL = 'https://platform.fatsecret.com/rest/server.api';
 
-async function fetchWithTimeout(url: string, options: RequestInit, timeoutMs = 8000): Promise<Response> {
+async function fetchWithTimeout(
+  url: string,
+  options: RequestInit,
+  timeoutMs = 8000,
+): Promise<Response> {
   const controller = new AbortController();
   const id = setTimeout(() => {
     console.log('Request timed out after', timeoutMs, 'ms');
@@ -30,14 +34,18 @@ async function getAccessToken(): Promise<string> {
   console.log('CLIENT_SECRET set:', CLIENT_SECRET.length > 0);
 
   const credentials = btoa(`${CLIENT_ID}:${CLIENT_SECRET}`);
-  const res = await fetchWithTimeout(TOKEN_URL, {
-    method: 'POST',
-    headers: {
-      'Authorization': `Basic ${credentials}`,
-      'Content-Type': 'application/x-www-form-urlencoded',
+  const res = await fetchWithTimeout(
+    TOKEN_URL,
+    {
+      method: 'POST',
+      headers: {
+        'Authorization': `Basic ${credentials}`,
+        'Content-Type': 'application/x-www-form-urlencoded',
+      },
+      body: 'grant_type=client_credentials&scope=basic barcode premier',
     },
-    body: 'grant_type=client_credentials&scope=basic',
-  }, 8000);
+    8000,
+  );
 
   const text = await res.text();
   console.log('Token response:', res.status, text.slice(0, 300));
@@ -50,13 +58,18 @@ async function getAccessToken(): Promise<string> {
   return data.access_token;
 }
 
-async function callFatSecret(token: string, params: Record<string, string>): Promise<any> {
+async function callFatSecret(
+  token: string,
+  params: Record<string, string>,
+): Promise<any> {
   const queryString = new URLSearchParams({ ...params, format: 'json' }).toString();
   console.log('Calling FatSecret method:', params.method);
 
-  const res = await fetchWithTimeout(`${API_URL}?${queryString}`, {
-    headers: { 'Authorization': `Bearer ${token}` },
-  }, 8000);
+  const res = await fetchWithTimeout(
+    `${API_URL}?${queryString}`,
+    { headers: { 'Authorization': `Bearer ${token}` } },
+    8000,
+  );
 
   const text = await res.text();
   console.log('FatSecret response:', res.status, text.slice(0, 500));
@@ -67,7 +80,20 @@ async function callFatSecret(token: string, params: Record<string, string>): Pro
 
 function mapFood(food: any, barcode?: string): any {
   const servings = food.servings?.serving;
-  const serving = Array.isArray(servings) ? servings[0] : servings;
+  const servingList = Array.isArray(servings) ? servings : servings ? [servings] : [];
+
+  // Prefer default serving, then 100g serving, then first serving
+  const defaultServing = servingList.find((s: any) => s.is_default === '1')
+    ?? servingList.find((s: any) => s.metric_serving_amount === '100')
+    ?? servingList[0];
+
+  const serving = defaultServing;
+
+  // Premier endpoints return food_images; the shape varies by call.
+  const imageUrl = food.food_images?.food_image?.[0]?.image_url
+    ?? food.food_images?.food_image?.image_url
+    ?? null;
+
   return {
     id: String(food.food_id),
     name: food.food_name ?? 'Unknown',
@@ -82,6 +108,17 @@ function mapFood(food: any, barcode?: string): any {
     serving_size: Number(serving?.metric_serving_amount ?? 100),
     serving_unit: serving?.metric_serving_unit ?? 'g',
     serving_description: serving?.serving_description ?? '1 serving',
+    all_servings: servingList.map((s: any) => ({
+      id: String(s.serving_id ?? ''),
+      description: s.serving_description ?? '1 serving',
+      calories: Math.round(Number(s.calories ?? 0)),
+      protein_g: Math.round(Number(s.protein ?? 0) * 10) / 10,
+      carbs_g: Math.round(Number(s.carbohydrate ?? 0) * 10) / 10,
+      fat_g: Math.round(Number(s.fat ?? 0) * 10) / 10,
+      metric_amount: Number(s.metric_serving_amount ?? 0),
+      metric_unit: s.metric_serving_unit ?? 'g',
+    })),
+    image_url: imageUrl,
     barcode: barcode ?? null,
   };
 }
@@ -99,12 +136,28 @@ Deno.serve(async (req) => {
     const token = await getAccessToken();
     console.log('Token obtained successfully');
 
+    if (mode === 'autocomplete') {
+      const data = await callFatSecret(token, {
+        method: 'foods.autocomplete',
+        expression: query,
+        max_results: '8',
+      });
+      const suggestions = data.suggestions?.suggestion ?? [];
+      const list = Array.isArray(suggestions) ? suggestions : [suggestions];
+      return new Response(JSON.stringify({ suggestions: list }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
     if (mode === 'search') {
       const data = await callFatSecret(token, {
         method: 'foods.search',
         search_expression: query,
         max_results: '20',
         page_number: '0',
+        include_food_images: 'true',
+        include_food_attributes: 'true',
+        flag_default_serving: 'true',
       });
 
       const foods = data.foods?.food ?? [];
@@ -116,12 +169,15 @@ Deno.serve(async (req) => {
             const detail = await callFatSecret(token, {
               method: 'food.get.v4',
               food_id: String(f.food_id),
+              include_food_images: 'true',
+              include_food_attributes: 'true',
+              flag_default_serving: 'true',
             });
             return mapFood(detail.food);
           } catch {
             return mapFood(f);
           }
-        })
+        }),
       );
 
       return new Response(JSON.stringify({ results }), {
@@ -151,6 +207,9 @@ Deno.serve(async (req) => {
       const foodData = await callFatSecret(token, {
         method: 'food.get.v4',
         food_id: foodId,
+        include_food_images: 'true',
+        include_food_attributes: 'true',
+        flag_default_serving: 'true',
       });
 
       const result = mapFood(foodData.food, cleanBarcode);
@@ -159,7 +218,7 @@ Deno.serve(async (req) => {
       });
     }
 
-    throw new Error('Invalid mode. Use search or barcode');
+    throw new Error('Invalid mode. Use search, barcode, or autocomplete');
   } catch (e) {
     const message = e instanceof Error ? e.message : String(e);
     console.error('Function error:', message);

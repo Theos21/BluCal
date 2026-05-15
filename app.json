@@ -19,8 +19,6 @@
       "bundleIdentifier": "com.blucal.app",
       "usesAppleSignIn": true,
       "entitlements": {
-        "com.apple.developer.healthkit": true,
-        "com.apple.developer.healthkit.access": [],
         "com.apple.developer.applesignin": [
           "Default"
         ]
@@ -50,13 +48,6 @@
     "plugins": [
       "expo-router",
       "expo-apple-authentication",
-      [
-        "react-native-health",
-        {
-          "healthSharePermission": "BluCal reads your weight and workout data to improve your macro targets.",
-          "healthUpdatePermission": "BluCal writes your nutrition data to Apple Health."
-        }
-      ],
       [
         "expo-notifications",
         {

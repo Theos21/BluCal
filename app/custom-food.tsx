@@ -14,7 +14,7 @@ import {
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { router } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import { radius, space, type as typo, useTheme, type Theme } from '../lib/theme';
 import Toast from '../components/Toast';
 import { useToast } from '../lib/useToast';
@@ -105,24 +105,46 @@ export default function CustomFood() {
   const toast = useToast();
   const { user } = useAuth();
 
+  const params = useLocalSearchParams<{
+    fromLabelScan?: string;
+    prefillName?: string;
+    prefillServingSize?: string;
+    prefillCal?: string;
+    prefillProtein?: string;
+    prefillCarbs?: string;
+    prefillFat?: string;
+    prefillFiber?: string;
+    prefillSugar?: string;
+    prefillSodium?: string;
+    prefillSatFat?: string;
+    prefillCholesterol?: string;
+  }>();
+  const param = (v: string | undefined): string =>
+    typeof v === 'string' ? v : '';
+  const fromLabelScan = param(params.fromLabelScan) === '1';
+
   const [saving, setSaving] = useState(false);
-  const [name, setName] = useState('');
+  const [name, setName] = useState(param(params.prefillName));
   const [brand, setBrand] = useState('');
   const [barcode, setBarcode] = useState('');
-  const [servingSize, setServingSize] = useState('1');
+  const [servingSize, setServingSize] = useState(
+    param(params.prefillServingSize) || '1',
+  );
   const [unitIdx, setUnitIdx] = useState(0);
 
-  const [cal, setCal] = useState('');
-  const [protein, setProtein] = useState('');
-  const [carbs, setCarbs] = useState('');
-  const [fat, setFat] = useState('');
+  const [cal, setCal] = useState(param(params.prefillCal));
+  const [protein, setProtein] = useState(param(params.prefillProtein));
+  const [carbs, setCarbs] = useState(param(params.prefillCarbs));
+  const [fat, setFat] = useState(param(params.prefillFat));
 
   const [extendedOpen, setExtendedOpen] = useState(false);
-  const [fiber, setFiber] = useState('');
-  const [sugar, setSugar] = useState('');
-  const [sodium, setSodium] = useState('');
-  const [satFat, setSatFat] = useState('');
-  const [cholesterol, setCholesterol] = useState('');
+  const [fiber, setFiber] = useState(param(params.prefillFiber));
+  const [sugar, setSugar] = useState(param(params.prefillSugar));
+  const [sodium, setSodium] = useState(param(params.prefillSodium));
+  const [satFat, setSatFat] = useState(param(params.prefillSatFat));
+  const [cholesterol, setCholesterol] = useState(
+    param(params.prefillCholesterol),
+  );
 
   const [shareCommunity, setShareCommunity] = useState(false);
   const [attemptedSave, setAttemptedSave] = useState(false);
@@ -256,6 +278,30 @@ export default function CustomFood() {
           keyboardShouldPersistTaps="handled"
         >
           {/* Section 1 — Basic info */}
+          {fromLabelScan && (
+            <View
+              style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                gap: space.xs,
+                backgroundColor: t.primarySoft,
+                borderRadius: radius.md,
+                padding: space.sm,
+                marginTop: space.md,
+                marginHorizontal: space.lg,
+              }}
+            >
+              <Ionicons
+                name="document-text-outline"
+                size={16}
+                color={t.primary}
+              />
+              <Text style={[typo.caption1, { color: t.primary, flex: 1 }]}>
+                Scanned from nutrition label. Review and confirm the name
+                before saving.
+              </Text>
+            </View>
+          )}
           <View style={{ marginTop: space.md }} />
           <SectionCard>
             <View

@@ -27,7 +27,7 @@ import { useToast } from '../lib/useToast';
 import { useAuth } from '../lib/AuthContext';
 import { addFoodEntry } from '../lib/db';
 import { lookupBarcode, type FoodSearchResult } from '../lib/foodSearch';
-import { scanNutritionLabel, type NutritionLabelResult } from '../lib/bluai';
+import { scanNutritionLabel } from '../lib/bluai';
 import { sessionState } from '../lib/sessionState';
 
 const FRAME_W = 260;
@@ -684,38 +684,11 @@ export default function BarcodeScanner() {
   const [lookingUp, setLookingUp] = useState(false);
   const [saving, setSaving] = useState(false);
   const [scanningLabel, setScanningLabel] = useState(false);
-  const [labelResult, setLabelResult] = useState<NutritionLabelResult | null>(
-    null,
-  );
 
   const cameraRef = useRef<CameraView>(null);
 
-  // A scanned nutrition label is surfaced through the same found sheet as a
-  // barcode hit, so adapt it to the FoodSearchResult shape that sheet expects.
-  const labelAsFood: FoodSearchResult | null = labelResult
-    ? {
-        id: 'label-scan',
-        name: labelResult.name,
-        brand: null,
-        calories: labelResult.calories,
-        protein_g: labelResult.protein_g,
-        carbs_g: labelResult.carbs_g,
-        fat_g: labelResult.fat_g,
-        fiber_g: labelResult.fiber_g,
-        sugar_g: labelResult.sugar_g,
-        sodium_mg: labelResult.sodium_mg,
-        serving_size: labelResult.serving_size_g,
-        serving_unit: 'g',
-        serving_description: labelResult.serving_description,
-        all_servings: [],
-        image_url: null,
-        barcode: null,
-      }
-    : null;
-
   const sheetY = useRef(new Animated.Value(screenH)).current;
-  const sheetVisible =
-    scannedProduct !== null || labelResult !== null || notFound;
+  const sheetVisible = scannedProduct !== null || notFound;
 
   useEffect(() => {
     if (permission && !permission.granted && permission.canAskAgain) {
@@ -770,14 +743,12 @@ export default function BarcodeScanner() {
   const handleRetry = () => {
     setNotFound(false);
     setScannedProduct(null);
-    setLabelResult(null);
     setLookingUp(false);
     setLastBarcode('');
   };
 
   const handleWrongProduct = () => {
     setScannedProduct(null);
-    setLabelResult(null);
     setNotFound(false);
     setLookingUp(false);
   };
@@ -793,8 +764,25 @@ export default function BarcodeScanner() {
       if (!photo?.base64) throw new Error('No image');
       toast.show('Reading nutrition label…', 'info');
       const result = await scanNutritionLabel(photo.base64, 'image/jpeg');
-      setLabelResult(result);
-      setNotFound(false);
+      // A label scan always routes to the custom-food form pre-filled, so the
+      // user can confirm the product name before the food is saved.
+      router.replace({
+        pathname: '/custom-food',
+        params: {
+          fromLabelScan: '1',
+          prefillName: result.name,
+          prefillServingSize: String(result.serving_size_g),
+          prefillCal: String(result.calories),
+          prefillProtein: String(result.protein_g),
+          prefillCarbs: String(result.carbs_g),
+          prefillFat: String(result.fat_g),
+          prefillFiber: String(result.fiber_g),
+          prefillSugar: String(result.sugar_g),
+          prefillSodium: String(result.sodium_mg),
+          prefillSatFat: String(result.saturated_fat_g),
+          prefillCholesterol: String(result.cholesterol_mg),
+        },
+      });
     } catch {
       toast.show(
         'Could not read label. Try again with better lighting.',
@@ -806,16 +794,14 @@ export default function BarcodeScanner() {
   };
 
   const handleAddToLog = async (payload: AddPayload) => {
-    const product = scannedProduct ?? labelAsFood;
-    if (!user || !product || saving) return;
-    const isLabelScan = scannedProduct === null;
+    if (!user || !scannedProduct || saving) return;
     setSaving(true);
     try {
       const { unit, qty, portionDescription, scaled } = payload;
       await addFoodEntry({
         user_id: user.id,
         logged_at: new Date().toISOString(),
-        name: product.name,
+        name: scannedProduct.name,
         portion_description: portionDescription,
         quantity: qty,
         unit,
@@ -828,12 +814,12 @@ export default function BarcodeScanner() {
         sodium_mg: scaled.sodium,
         saturated_fat_g: 0,
         cholesterol_mg: 0,
-        food_database_id: isLabelScan ? null : product.id,
-        barcode: product.barcode,
-        source: isLabelScan ? 'bluai' : 'barcode',
+        food_database_id: scannedProduct.id,
+        barcode: scannedProduct.barcode,
+        source: 'barcode',
       });
-      sessionState.setJustLoggedFood(product.name);
-      toast.show(`Added: ${product.name}`, 'success');
+      sessionState.setJustLoggedFood(scannedProduct.name);
+      toast.show(`Added: ${scannedProduct.name}`, 'success');
       setTimeout(() => router.back(), 1200);
     } catch {
       toast.show('Could not add food. Try again.', 'error');
@@ -1132,16 +1118,7 @@ export default function BarcodeScanner() {
                 saving={saving}
               />
             )}
-            {!scannedProduct && labelAsFood && (
-              <FoundSheetContent
-                product={labelAsFood}
-                onAdd={handleAddToLog}
-                onWrongProduct={handleWrongProduct}
-                onScanLabel={handleScanNutritionLabel}
-                saving={saving}
-              />
-            )}
-            {!scannedProduct && !labelAsFood && notFound && (
+            {!scannedProduct && notFound && (
               <NotFoundSheetContent
                 barcode={lastBarcode}
                 onRetry={handleRetry}

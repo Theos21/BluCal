@@ -51,10 +51,10 @@
       "expo-router",
       "expo-apple-authentication",
       [
-        "@kingstinct/react-native-healthkit",
+        "react-native-health",
         {
-          "NSHealthShareUsageDescription": "BluCal reads your weight and workout data to improve your macro targets.",
-          "NSHealthUpdateUsageDescription": "BluCal writes your nutrition data to Apple Health."
+          "healthSharePermission": "BluCal reads your weight and workout data to improve your macro targets.",
+          "healthUpdatePermission": "BluCal writes your nutrition data to Apple Health."
         }
       ],
       [

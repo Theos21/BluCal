@@ -2,7 +2,9 @@ import { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  Image,
   KeyboardAvoidingView,
+  Modal,
   Platform,
   Pressable,
   ScrollView,
@@ -14,12 +16,21 @@ import {
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
+import * as ImagePicker from 'expo-image-picker';
 import Svg, { Circle, Polyline, Text as SvgText } from 'react-native-svg';
 import { radius, space, type as typo, useTheme, type Theme } from '../lib/theme';
 import Toast from '../components/Toast';
 import { useToast } from '../lib/useToast';
 import { useAuth } from '../lib/AuthContext';
-import { addWeightEntry, deleteWeightEntry, getWeightEntries } from '../lib/db';
+import {
+  addProgressPhoto,
+  addWeightEntry,
+  deleteProgressPhoto,
+  deleteWeightEntry,
+  getProgressPhotos,
+  getWeightEntries,
+  type ProgressPhotoWithUrl,
+} from '../lib/db';
 import type { WeightEntry } from '../lib/types';
 
 type Unit = 'lbs' | 'kg';
@@ -124,6 +135,11 @@ export default function LogWeight() {
   const [unit, setUnit] = useState<Unit>('lbs');
   const [note, setNote] = useState('');
   const [recentWeights, setRecentWeights] = useState<WeightEntry[]>([]);
+  const [photos, setPhotos] = useState<ProgressPhotoWithUrl[]>([]);
+  const [uploadingPhoto, setUploadingPhoto] = useState(false);
+  const [selectedPhoto, setSelectedPhoto] =
+    useState<ProgressPhotoWithUrl | null>(null);
+  const [showMeasurements, setShowMeasurements] = useState(false);
   const [saving, setSaving] = useState(false);
   const toast = useToast();
 
@@ -133,6 +149,7 @@ export default function LogWeight() {
   useEffect(() => {
     if (!user) return;
     getWeightEntries(user.id, 7).then(setRecentWeights).catch(console.error);
+    getProgressPhotos(user.id).then(setPhotos).catch(console.error);
   }, [user]);
 
   const sparklineData = recentWeights
@@ -201,6 +218,87 @@ export default function LogWeight() {
       ],
     );
   };
+
+  const savePhoto = async (uri: string) => {
+    if (!user) return;
+    try {
+      setUploadingPhoto(true);
+      await addProgressPhoto(user.id, uri, new Date().toISOString());
+      const updated = await getProgressPhotos(user.id);
+      setPhotos(updated);
+      toast.show('Photo saved', 'success');
+    } catch (e) {
+      console.error(e);
+      toast.show('Could not save photo. Try again.', 'error');
+    } finally {
+      setUploadingPhoto(false);
+    }
+  };
+
+  const handleAddPhoto = () => {
+    if (!user) return;
+    Alert.alert('Add progress photo', 'Choose how to add your photo', [
+      {
+        text: 'Take photo',
+        onPress: async () => {
+          const perm = await ImagePicker.requestCameraPermissionsAsync();
+          if (!perm.granted) {
+            toast.show('Camera permission required.', 'info');
+            return;
+          }
+          const result = await ImagePicker.launchCameraAsync({
+            quality: 0.8,
+            allowsEditing: true,
+            aspect: [3, 4],
+          });
+          if (!result.canceled && result.assets[0]) {
+            await savePhoto(result.assets[0].uri);
+          }
+        },
+      },
+      {
+        text: 'Choose from library',
+        onPress: async () => {
+          const result = await ImagePicker.launchImageLibraryAsync({
+            mediaTypes: ImagePicker.MediaTypeOptions.Images,
+            quality: 0.8,
+            allowsEditing: true,
+            aspect: [3, 4],
+          });
+          if (!result.canceled && result.assets[0]) {
+            await savePhoto(result.assets[0].uri);
+          }
+        },
+      },
+      { text: 'Cancel', style: 'cancel' },
+    ]);
+  };
+
+  const handleDeletePhoto = (photo: ProgressPhotoWithUrl) => {
+    Alert.alert('Delete photo?', 'This cannot be undone.', [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Delete',
+        style: 'destructive',
+        onPress: async () => {
+          try {
+            await deleteProgressPhoto(photo);
+            setPhotos((prev) => prev.filter((p) => p.id !== photo.id));
+            if (selectedPhoto?.id === photo.id) setSelectedPhoto(null);
+            toast.show('Photo deleted', 'success');
+          } catch {
+            toast.show('Could not delete photo.', 'error');
+          }
+        },
+      },
+    ]);
+  };
+
+  const formatPhotoDate = (iso: string): string =>
+    new Date(iso).toLocaleDateString('en-US', {
+      month: 'short',
+      day: 'numeric',
+    });
 
   const logDisabled = saving || !weight;
 
@@ -516,6 +614,161 @@ export default function LogWeight() {
               </View>
             </View>
           )}
+
+          {/* Progress photo entry */}
+          <View style={{ marginTop: space.xl }}>
+            <Text
+              style={[
+                typo.caption2,
+                {
+                  color: t.textTer,
+                  letterSpacing: 0.06,
+                  textTransform: 'uppercase',
+                  fontWeight: '700',
+                  marginBottom: space.sm,
+                },
+              ]}
+            >
+              Progress photo (optional)
+            </Text>
+            <Pressable
+              onPress={handleAddPhoto}
+              disabled={uploadingPhoto}
+              style={({ pressed }) => ({
+                height: 48,
+                borderRadius: radius.lg,
+                borderWidth: 1.5,
+                borderColor: `${t.primary}66`,
+                borderStyle: 'dashed',
+                alignItems: 'center',
+                justifyContent: 'center',
+                flexDirection: 'row',
+                gap: space.sm,
+                opacity: uploadingPhoto ? 0.5 : pressed ? 0.6 : 1,
+              })}
+            >
+              {uploadingPhoto ? (
+                <ActivityIndicator color={t.primary} />
+              ) : (
+                <>
+                  <Ionicons name="camera-outline" size={18} color={t.primary} />
+                  <Text style={[typo.subhead, { color: t.primary }]}>
+                    Add progress photo
+                  </Text>
+                </>
+              )}
+            </Pressable>
+
+            {photos.length > 0 && (
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={{
+                  gap: space.sm,
+                  paddingVertical: space.sm,
+                }}
+              >
+                {photos.map((photo) => (
+                  <Pressable
+                    key={photo.id}
+                    onPress={() => setSelectedPhoto(photo)}
+                    onLongPress={() => handleDeletePhoto(photo)}
+                    style={({ pressed }) => ({
+                      width: 80,
+                      aspectRatio: 3 / 4,
+                      borderRadius: radius.md,
+                      overflow: 'hidden',
+                      backgroundColor: t.surface2,
+                      opacity: pressed ? 0.7 : 1,
+                    })}
+                  >
+                    <Image
+                      source={{ uri: photo.signedUrl }}
+                      style={{ width: '100%', height: '100%' }}
+                      resizeMode="cover"
+                    />
+                    <View
+                      style={{
+                        position: 'absolute',
+                        bottom: 4,
+                        left: 4,
+                        backgroundColor: 'rgba(0,0,0,0.5)',
+                        borderRadius: 4,
+                        paddingHorizontal: 4,
+                        paddingVertical: 2,
+                      }}
+                    >
+                      <Text style={[typo.caption2, { color: '#FFFFFF' }]}>
+                        {formatPhotoDate(photo.taken_at)}
+                      </Text>
+                    </View>
+                  </Pressable>
+                ))}
+              </ScrollView>
+            )}
+          </View>
+
+          {/* Collapsible body measurements section */}
+          <View style={{ marginTop: space.lg }}>
+            <Pressable
+              onPress={() => setShowMeasurements((v) => !v)}
+              style={({ pressed }) => ({
+                flexDirection: 'row',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                paddingVertical: space.sm,
+                paddingHorizontal: space.md,
+                backgroundColor: t.surface2,
+                borderRadius: radius.lg,
+                opacity: pressed ? 0.7 : 1,
+              })}
+            >
+              <View
+                style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  gap: space.sm,
+                }}
+              >
+                <Ionicons name="body-outline" size={18} color={t.textSec} />
+                <Text style={[typo.subhead, { color: t.text, fontWeight: '600' }]}>
+                  Body measurements
+                </Text>
+              </View>
+              <Ionicons
+                name={showMeasurements ? 'chevron-up' : 'chevron-down'}
+                size={16}
+                color={t.textTer}
+              />
+            </Pressable>
+            {showMeasurements && (
+              <View style={{ marginTop: space.xs }}>
+                <Pressable
+                  onPress={() => router.push('/body-measurements')}
+                  style={({ pressed }) => ({
+                    backgroundColor: t.surface,
+                    borderRadius: radius.lg,
+                    borderWidth: 1,
+                    borderColor: t.hairline,
+                    padding: space.md,
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    opacity: pressed ? 0.6 : 1,
+                  })}
+                >
+                  <Text style={[typo.subhead, { color: t.text }]}>
+                    Log measurements
+                  </Text>
+                  <Ionicons
+                    name="chevron-forward"
+                    size={16}
+                    color={t.textTer}
+                  />
+                </Pressable>
+              </View>
+            )}
+          </View>
         </ScrollView>
 
         {/* Log button */}
@@ -548,6 +801,79 @@ export default function LogWeight() {
           </Pressable>
         </View>
       </KeyboardAvoidingView>
+
+      {/* Full-screen photo viewer */}
+      <Modal
+        visible={selectedPhoto !== null}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setSelectedPhoto(null)}
+      >
+        <View style={{ flex: 1, backgroundColor: '#000' }}>
+          {selectedPhoto && (
+            <>
+              <Pressable
+                onLongPress={() => handleDeletePhoto(selectedPhoto)}
+                style={{ flex: 1, justifyContent: 'center' }}
+              >
+                <Image
+                  source={{ uri: selectedPhoto.signedUrl }}
+                  style={{ width: '100%', height: '100%' }}
+                  resizeMode="contain"
+                />
+              </Pressable>
+              <Pressable
+                onPress={() => setSelectedPhoto(null)}
+                hitSlop={8}
+                style={({ pressed }) => ({
+                  position: 'absolute',
+                  top: insets.top + space.sm,
+                  right: space.lg,
+                  width: 36,
+                  height: 36,
+                  borderRadius: 18,
+                  backgroundColor: 'rgba(255,255,255,0.15)',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  opacity: pressed ? 0.6 : 1,
+                })}
+              >
+                <Ionicons name="close" size={22} color="#FFFFFF" />
+              </Pressable>
+              <View
+                style={{
+                  position: 'absolute',
+                  bottom: insets.bottom + space.lg,
+                  left: 0,
+                  right: 0,
+                  alignItems: 'center',
+                }}
+              >
+                <Text style={[typo.subhead, { color: '#FFFFFF' }]}>
+                  {new Date(selectedPhoto.taken_at).toLocaleDateString(
+                    'en-US',
+                    {
+                      weekday: 'long',
+                      month: 'long',
+                      day: 'numeric',
+                      year: 'numeric',
+                    },
+                  )}
+                </Text>
+                <Text
+                  style={[
+                    typo.caption1,
+                    { color: 'rgba(255,255,255,0.5)', marginTop: 4 },
+                  ]}
+                >
+                  Long press to delete
+                </Text>
+              </View>
+            </>
+          )}
+        </View>
+      </Modal>
+
       <Toast
         message={toast.message}
         visible={toast.visible}

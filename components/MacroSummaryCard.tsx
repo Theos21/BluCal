@@ -1,7 +1,7 @@
-import { View, Text } from 'react-native';
+import { useState } from 'react';
+import { Pressable, Text, View } from 'react-native';
+import Svg, { Circle } from 'react-native-svg';
 import { radius, space, type as typo, useTheme } from '../lib/theme';
-
-type MacroRow = { label: string; cur: number; target: number; color: string };
 
 type Props = {
   consumed: number;
@@ -11,22 +11,120 @@ type Props = {
   fat: { cur: number; target: number };
 };
 
-function ProgressBar({
+type MacroView = 'consumed' | 'remaining';
+
+function MacroRing({
+  label,
+  consumed,
+  target,
+  color,
+  view,
+  onToggle,
+  size = 90,
+}: {
+  label: string;
+  consumed: number;
+  target: number;
+  color: string;
+  view: MacroView;
+  onToggle: () => void;
+  size?: number;
+}) {
+  const t = useTheme();
+  const strokeWidth = 8;
+  const r = (size - strokeWidth) / 2;
+  const circumference = 2 * Math.PI * r;
+  const progress = target > 0 ? Math.min(1, consumed / target) : 0;
+  const strokeDashoffset = circumference * (1 - progress);
+  const remaining = Math.max(0, Math.round(target - consumed));
+  const displayValue =
+    view === 'consumed' ? Math.round(consumed) : remaining;
+  const isOver = consumed > target;
+
+  return (
+    <Pressable
+      onPress={onToggle}
+      style={({ pressed }) => ({
+        alignItems: 'center',
+        gap: 6,
+        opacity: pressed ? 0.7 : 1,
+      })}
+    >
+      <View style={{ width: size, height: size }}>
+        <Svg
+          width={size}
+          height={size}
+          style={{ transform: [{ rotate: '-90deg' }] }}
+        >
+          <Circle
+            cx={size / 2}
+            cy={size / 2}
+            r={r}
+            stroke={t.surface2}
+            strokeWidth={strokeWidth}
+            fill="none"
+          />
+          <Circle
+            cx={size / 2}
+            cy={size / 2}
+            r={r}
+            stroke={isOver ? t.danger : color}
+            strokeWidth={strokeWidth}
+            fill="none"
+            strokeDasharray={circumference}
+            strokeDashoffset={strokeDashoffset}
+            strokeLinecap="round"
+          />
+        </Svg>
+        <View
+          style={{
+            position: 'absolute',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            alignItems: 'center',
+            justifyContent: 'center',
+          }}
+        >
+          <Text
+            style={{
+              fontSize: 16,
+              fontWeight: '700',
+              color: isOver ? t.danger : t.text,
+            }}
+          >
+            {displayValue}
+          </Text>
+          <Text style={{ fontSize: 10, color: t.textTer }}>g</Text>
+        </View>
+      </View>
+      <Text style={[typo.caption1, { color: t.textSec, fontWeight: '600' }]}>
+        {label}
+      </Text>
+      <Text style={[typo.caption2, { color: t.textTer }]}>
+        {view === 'consumed'
+          ? `of ${Math.round(target)}g`
+          : `${remaining}g left`}
+      </Text>
+    </Pressable>
+  );
+}
+
+function CalorieBar({
   pct,
-  height,
-  track,
   fill,
+  track,
 }: {
   pct: number;
-  height: number;
-  track: string;
   fill: string;
+  track: string;
 }) {
   const clamped = Math.max(0, Math.min(1, pct));
   return (
     <View
       style={{
-        height,
+        height: 8,
         backgroundColor: track,
         borderRadius: radius.pill,
         overflow: 'hidden',
@@ -44,42 +142,6 @@ function ProgressBar({
   );
 }
 
-function MacroBarRow({ row }: { row: MacroRow }) {
-  const t = useTheme();
-  return (
-    <View>
-      <View
-        style={{
-          flexDirection: 'row',
-          justifyContent: 'space-between',
-          alignItems: 'baseline',
-          marginBottom: 6,
-        }}
-      >
-        <Text style={[typo.subheadEm, { color: t.text }]}>{row.label}</Text>
-        <Text style={[typo.caption1, { color: t.textSec }]}>
-          <Text
-            style={{
-              color: t.text,
-              fontWeight: '700',
-              fontVariant: ['tabular-nums'],
-            }}
-          >
-            {row.cur}g
-          </Text>
-          {` / ${row.target}g`}
-        </Text>
-      </View>
-      <ProgressBar
-        pct={row.cur / row.target}
-        height={8}
-        track={t.surface2}
-        fill={row.color}
-      />
-    </View>
-  );
-}
-
 export default function MacroSummaryCard({
   consumed,
   target,
@@ -91,6 +153,9 @@ export default function MacroSummaryCard({
   const over = consumed > target;
   const remaining = Math.abs(target - consumed);
   const pct = target > 0 ? consumed / target : 0;
+  const [macroView, setMacroView] = useState<MacroView>('consumed');
+  const toggle = () =>
+    setMacroView((v) => (v === 'consumed' ? 'remaining' : 'consumed'));
 
   return (
     <View
@@ -158,11 +223,10 @@ export default function MacroSummaryCard({
       </View>
 
       <View style={{ marginTop: space.md }}>
-        <ProgressBar
+        <CalorieBar
           pct={pct}
-          height={8}
-          track={t.surface2}
           fill={over ? t.danger : t.primary}
+          track={t.surface2}
         />
       </View>
 
@@ -175,32 +239,50 @@ export default function MacroSummaryCard({
         }}
       />
 
-      <View style={{ gap: space.md }}>
-        <MacroBarRow
-          row={{
-            label: 'Protein',
-            cur: protein.cur,
-            target: protein.target,
-            color: t.protein,
-          }}
+      <View
+        style={{
+          flexDirection: 'row',
+          justifyContent: 'space-around',
+          paddingVertical: space.md,
+        }}
+      >
+        <MacroRing
+          label="Protein"
+          consumed={protein.cur}
+          target={protein.target}
+          color={t.protein}
+          view={macroView}
+          onToggle={toggle}
         />
-        <MacroBarRow
-          row={{
-            label: 'Carbs',
-            cur: carbs.cur,
-            target: carbs.target,
-            color: t.carbs,
-          }}
+        <MacroRing
+          label="Carbs"
+          consumed={carbs.cur}
+          target={carbs.target}
+          color={t.carbs}
+          view={macroView}
+          onToggle={toggle}
         />
-        <MacroBarRow
-          row={{
-            label: 'Fat',
-            cur: fat.cur,
-            target: fat.target,
-            color: t.fat,
-          }}
+        <MacroRing
+          label="Fat"
+          consumed={fat.cur}
+          target={fat.target}
+          color={t.fat}
+          view={macroView}
+          onToggle={toggle}
         />
       </View>
+      <Text
+        style={[
+          typo.caption2,
+          {
+            color: t.textTer,
+            textAlign: 'center',
+            marginTop: space.xs,
+          },
+        ]}
+      >
+        Tap rings to toggle consumed / remaining
+      </Text>
     </View>
   );
 }

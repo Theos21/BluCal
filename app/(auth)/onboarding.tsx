@@ -22,7 +22,7 @@ import Toast from '../../components/Toast';
 import { useToast } from '../../lib/useToast';
 import type { ActivityLevel, BiologicalSex, Goal, Pace } from '../../lib/types';
 import {
-  birthdayFromAge,
+  ageFromBirthday,
   calculateMacroTargets,
   type Targets,
 } from '../../lib/macroCalculator';
@@ -556,8 +556,15 @@ export default function Onboarding() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [profile?.name]);
   const [sex, setSex] = useState<Sex | null>(null);
-  const [age, setAge] = useState('');
+  const [birthYear, setBirthYear] = useState('');
+  const [birthMonth, setBirthMonth] = useState('');
+  const [birthDay, setBirthDay] = useState('');
   const [isMetric, setIsMetric] = useState(false);
+
+  const birthday =
+    birthYear && birthMonth && birthDay
+      ? `${birthYear}-${birthMonth.padStart(2, '0')}-${birthDay.padStart(2, '0')}`
+      : '';
   const [heightFt, setHeightFt] = useState('');
   const [heightIn, setHeightIn] = useState('');
   const [heightCm, setHeightCm] = useState('');
@@ -587,7 +594,7 @@ export default function Onboarding() {
     const heightCmVal = isMetric
       ? Number(heightCm)
       : Number(heightFt) * 30.48 + Number(heightIn) * 2.54;
-    const ageVal = Number(age);
+    const ageVal = birthday ? ageFromBirthday(birthday) ?? 0 : 0;
     if (
       !Number.isFinite(weightKgVal) ||
       weightKgVal <= 0 ||
@@ -613,7 +620,7 @@ export default function Onboarding() {
         pace,
       ),
     );
-  }, [step, isMetric, weight, heightCm, heightFt, heightIn, age, sex, activity, goal, pace]);
+  }, [step, isMetric, weight, heightCm, heightFt, heightIn, birthday, sex, activity, goal, pace]);
 
   const completeOnboarding = async () => {
     if (saving) return;
@@ -632,12 +639,9 @@ export default function Onboarding() {
       const weightKgValue = isMetric
         ? Number(weight)
         : Number(weight) * 0.453592;
-      const ageNum = Number(age);
-      const birthday =
-        Number.isFinite(ageNum) && ageNum > 0 ? birthdayFromAge(ageNum) : null;
       const profileData: Record<string, unknown> = {
         biological_sex: mapSexToDb(sex),
-        birthday,
+        birthday: birthday || null,
         height_cm: Number.isFinite(heightCmValue) ? heightCmValue : null,
         goal: (goal as Goal | null) ?? null,
         goal_weight_kg: Number.isFinite(goalWeightKg) ? goalWeightKg : null,
@@ -881,13 +885,93 @@ export default function Onboarding() {
               </View>
 
               <View style={{ marginTop: space.lg }}>
-                <InputLabel>Age</InputLabel>
-                <TextField
-                  value={age}
-                  onChangeText={setAge}
-                  placeholder="0"
-                  keyboardType="numeric"
-                />
+                <InputLabel>Birthday</InputLabel>
+                <View style={{ flexDirection: 'row', gap: space.sm }}>
+                  <View style={{ flex: 2 }}>
+                    <Text
+                      style={[
+                        typo.caption1,
+                        { color: t.textTer, marginBottom: 4 },
+                      ]}
+                    >
+                      Year
+                    </Text>
+                    <TextInput
+                      style={[
+                        typo.body,
+                        {
+                          backgroundColor: t.surface2,
+                          borderRadius: radius.lg,
+                          padding: space.sm,
+                          color: t.text,
+                          textAlign: 'center',
+                        },
+                      ]}
+                      placeholder="1990"
+                      placeholderTextColor={t.textTer}
+                      value={birthYear}
+                      onChangeText={setBirthYear}
+                      keyboardType="number-pad"
+                      maxLength={4}
+                    />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text
+                      style={[
+                        typo.caption1,
+                        { color: t.textTer, marginBottom: 4 },
+                      ]}
+                    >
+                      Month
+                    </Text>
+                    <TextInput
+                      style={[
+                        typo.body,
+                        {
+                          backgroundColor: t.surface2,
+                          borderRadius: radius.lg,
+                          padding: space.sm,
+                          color: t.text,
+                          textAlign: 'center',
+                        },
+                      ]}
+                      placeholder="05"
+                      placeholderTextColor={t.textTer}
+                      value={birthMonth}
+                      onChangeText={setBirthMonth}
+                      keyboardType="number-pad"
+                      maxLength={2}
+                    />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text
+                      style={[
+                        typo.caption1,
+                        { color: t.textTer, marginBottom: 4 },
+                      ]}
+                    >
+                      Day
+                    </Text>
+                    <TextInput
+                      style={[
+                        typo.body,
+                        {
+                          backgroundColor: t.surface2,
+                          borderRadius: radius.lg,
+                          padding: space.sm,
+                          color: t.text,
+                          textAlign: 'center',
+                        },
+                      ]}
+                      placeholder="15"
+                      placeholderTextColor={t.textTer}
+                      value={birthDay}
+                      onChangeText={setBirthDay}
+                      keyboardType="number-pad"
+                      maxLength={2}
+                    />
+                  </View>
+                </View>
               </View>
 
               {isMetric ? (

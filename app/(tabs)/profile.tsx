@@ -59,38 +59,6 @@ const PACE_LABELS: Record<Pace, string> = {
   aggressive: 'Aggressive',
 };
 
-function formatHeight(
-  heightCm: number | null | undefined,
-  isMetric: boolean,
-): string {
-  if (heightCm === null || heightCm === undefined) return 'Not set';
-  if (isMetric) return `${Math.round(heightCm)} cm`;
-  const totalInches = heightCm / 2.54;
-  const ft = Math.floor(totalInches / 12);
-  const inches = Math.round(totalInches - ft * 12);
-  return `${ft}'${inches}"`;
-}
-
-function formatGoalWeight(
-  kg: number | null | undefined,
-  isMetric: boolean,
-): string {
-  if (kg === null || kg === undefined) return 'Not set';
-  if (isMetric) return `${kg.toFixed(1)} kg`;
-  return `${(kg * 2.20462).toFixed(1)} lbs`;
-}
-
-function formatBirthday(birthday: string | null | undefined): string {
-  if (!birthday) return 'Not set';
-  const [year, month, day] = birthday.split('-').map(Number);
-  const date = new Date(year, month - 1, day);
-  return date.toLocaleDateString('en-US', {
-    month: 'long',
-    day: 'numeric',
-    year: 'numeric',
-  });
-}
-
 function formatHour12(hour24: number): string {
   const h = hour24 % 12 === 0 ? 12 : hour24 % 12;
   const period = hour24 >= 12 ? 'PM' : 'AM';
@@ -922,7 +890,7 @@ export default function Profile() {
       const escape = (v: string): string =>
         /[",\n]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v;
       const csv = [
-        'Date,Food,Calories,Protein,Carbs,Fat',
+        'Date,Food,Calories,Protein(g),Carbs(g),Fat(g),Fiber(g),Sodium(mg)',
         ...entries.map((e) =>
           [
             new Date(e.logged_at).toLocaleDateString(),
@@ -931,6 +899,8 @@ export default function Profile() {
             e.protein_g,
             e.carbs_g,
             e.fat_g,
+            e.fiber_g ?? 0,
+            e.sodium_mg ?? 0,
           ].join(','),
         ),
       ].join('\n');
@@ -1017,6 +987,10 @@ export default function Profile() {
     );
   };
 
+  const goalsSummary = profile?.goal
+    ? `${GOAL_LABELS[profile.goal]}${profile.pace ? ` · ${PACE_LABELS[profile.pace]}` : ''}`
+    : 'Not set';
+
   const displayName = profile?.name ?? 'Your Name';
   const initials = displayName
     .split(' ')
@@ -1041,26 +1015,6 @@ export default function Profile() {
         {/* Profile */}
         <SectionLabel label="Profile" />
         <Section>
-          <SettingsRow
-            label="Name"
-            value={profile?.name ?? 'Not set'}
-            onPress={() => router.push('/edit-profile')}
-          />
-          <SettingsRow
-            label="Birthday"
-            value={formatBirthday(profile?.birthday)}
-            onPress={() => router.push('/edit-profile')}
-          />
-          <SettingsRow
-            label="Biological sex"
-            value={profile?.biological_sex ?? 'Not set'}
-            onPress={() => router.push('/edit-profile')}
-          />
-          <SettingsRow
-            label="Height"
-            value={formatHeight(profile?.height_cm, isMetric)}
-            onPress={() => router.push('/edit-profile')}
-          />
           {isSocialUser && (
             <SettingsRow
               icon="key-outline"
@@ -1161,29 +1115,13 @@ export default function Profile() {
         )}
         <Section>
           <SettingsRow
-            label="Current goal"
-            value={profile?.goal ? GOAL_LABELS[profile.goal] : 'Not set'}
-            onPress={() => router.push('/edit-goals')}
-          />
-          <SettingsRow
-            label="Goal weight"
-            value={formatGoalWeight(profile?.goal_weight_kg, isMetric)}
-            onPress={() => router.push('/edit-goals')}
-          />
-          <SettingsRow
-            label="Weekly pace"
-            value={profile?.pace ? PACE_LABELS[profile.pace] : 'Not set'}
+            label="Edit goals"
+            value={goalsSummary}
             onPress={() => router.push('/edit-goals')}
           />
           <SettingsRow
             icon="body-outline"
             label="Body measurements"
-            onPress={() => router.push('/body-measurements')}
-          />
-          <SettingsRow
-            icon="camera-outline"
-            label="Progress Photos"
-            value="View and compare"
             onPress={() => router.push('/body-measurements')}
           />
           <SettingsRow

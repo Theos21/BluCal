@@ -15,11 +15,14 @@ import {
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { router, useLocalSearchParams } from 'expo-router';
+import { useCameraPermissions } from 'expo-camera';
+import * as ImagePicker from 'expo-image-picker';
 import { radius, space, type as typo, useTheme, type Theme } from '../lib/theme';
 import Toast from '../components/Toast';
 import { useToast } from '../lib/useToast';
 import { useAuth } from '../lib/AuthContext';
 import { addCustomFood } from '../lib/db';
+import { scanNutritionLabel } from '../lib/bluai';
 
 const UNITS = ['g', 'oz', 'ml', 'cup', 'tbsp', 'tsp', 'piece', 'serving'] as const;
 
@@ -148,6 +151,8 @@ export default function CustomFood() {
 
   const [shareCommunity, setShareCommunity] = useState(false);
   const [attemptedSave, setAttemptedSave] = useState(false);
+  const [scanningLabel, setScanningLabel] = useState(false);
+  const [permission, requestPermission] = useCameraPermissions();
 
   const nameShake = useRef(new Animated.Value(0)).current;
   const calShake = useRef(new Animated.Value(0)).current;
@@ -200,6 +205,52 @@ export default function CustomFood() {
       toast.show('Could not save food. Try again.', 'error');
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleScanNutritionLabel = async () => {
+    if (!permission?.granted) {
+      const result = await requestPermission();
+      if (!result.granted) {
+        toast.show('Camera permission required.', 'error');
+        return;
+      }
+    }
+    setScanningLabel(true);
+    try {
+      const photo = await ImagePicker.launchCameraAsync({
+        base64: true,
+        quality: 0.9,
+        allowsEditing: false,
+      });
+      if (photo.canceled) return;
+      const base64 = photo.assets[0]?.base64;
+      if (!base64) return;
+      toast.show('Reading nutrition label…', 'info');
+      const result = await scanNutritionLabel(base64, 'image/jpeg');
+
+      // Pre-fill the form from the scanned label.
+      if (result.name && result.name !== 'Scanned Food') setName(result.name);
+      setCal(String(result.calories));
+      setProtein(String(result.protein_g));
+      setCarbs(String(result.carbs_g));
+      setFat(String(result.fat_g));
+      setFiber(String(result.fiber_g));
+      setSugar(String(result.sugar_g));
+      setSodium(String(result.sodium_mg));
+      setSatFat(String(result.saturated_fat_g));
+      setCholesterol(String(result.cholesterol_mg));
+      setServingSize(String(result.serving_size_g));
+      setUnitIdx(0);
+
+      toast.show('Nutrition label scanned successfully.', 'success');
+    } catch {
+      toast.show(
+        'Could not read label. Try again with better lighting.',
+        'error',
+      );
+    } finally {
+      setScanningLabel(false);
     }
   };
 
@@ -468,6 +519,46 @@ export default function CustomFood() {
               </Pressable>
             </View>
           </SectionCard>
+
+          {/* Scan nutrition label button */}
+          <Pressable
+            onPress={handleScanNutritionLabel}
+            disabled={scanningLabel}
+            style={({ pressed }) => ({
+              flexDirection: 'row',
+              alignItems: 'center',
+              gap: space.sm,
+              backgroundColor: t.surface2,
+              borderRadius: radius.lg,
+              padding: space.md,
+              marginTop: space.sm,
+              marginHorizontal: space.lg,
+              opacity: pressed || scanningLabel ? 0.6 : 1,
+            })}
+          >
+            {scanningLabel ? (
+              <ActivityIndicator size="small" color={t.primary} />
+            ) : (
+              <Ionicons
+                name="document-text-outline"
+                size={20}
+                color={t.primary}
+              />
+            )}
+            <View style={{ flex: 1 }}>
+              <Text
+                style={[typo.subhead, { color: t.text, fontWeight: '600' }]}
+              >
+                {scanningLabel ? 'Reading label…' : 'Scan nutrition label'}
+              </Text>
+              <Text style={[typo.caption1, { color: t.textSec }]}>
+                Point camera at the Nutrition Facts panel to auto-fill
+              </Text>
+            </View>
+            {!scanningLabel && (
+              <Ionicons name="camera-outline" size={18} color={t.textTer} />
+            )}
+          </Pressable>
 
           {/* Section 2 — Nutrition */}
           <SectionLabel>Nutrition per serving</SectionLabel>

@@ -28,7 +28,9 @@
       "infoPlist": {
         "NSCameraUsageDescription": "BluCal uses your camera to scan food barcodes and analyze meals with BluAI.",
         "NSPhotoLibraryUsageDescription": "BluCal accesses your photos so you can upload a meal photo to BluAI.",
-        "NSMicrophoneUsageDescription": "BluCal uses your microphone for voice food logging."
+        "NSMicrophoneUsageDescription": "BluCal uses your microphone for voice food logging.",
+        "NSSpeechRecognitionUsageDescription": "BluCal uses speech recognition to convert your voice into food searches.",
+        "ITSAppUsesNonExemptEncryption": false
       }
     },
     "android": {

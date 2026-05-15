@@ -1,6 +1,7 @@
 import { useCallback, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
+  Alert,
   Modal,
   Pressable,
   ScrollView,
@@ -20,8 +21,10 @@ import { useToast } from '../../lib/useToast';
 import { useAuth } from '../../lib/AuthContext';
 import {
   addFoodEntry,
+  deletePlannedMeal,
   getCurrentMacroTarget,
   getPlannedMealsForWeek,
+  unlogPlannedMeal,
 } from '../../lib/db';
 import { supabase } from '../../lib/supabase';
 import type { MacroTarget, PlannedMeal } from '../../lib/types';
@@ -223,32 +226,30 @@ function SectionLabel({ label }: { label: string }) {
   );
 }
 
-function LoggedBadge() {
-  const t = useTheme();
+function MealActionButton({
+  label,
+  bg,
+  color,
+  onPress,
+}: {
+  label: string;
+  bg: string;
+  color: string;
+  onPress: () => void;
+}) {
   return (
-    <View
-      style={{
-        alignSelf: 'flex-start',
-        marginTop: space.md,
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 4,
-        backgroundColor: t.successSoft,
-        borderRadius: radius.pill,
-        paddingHorizontal: 10,
-        paddingVertical: 4,
-      }}
+    <Pressable
+      onPress={onPress}
+      style={({ pressed }) => ({
+        paddingHorizontal: 12,
+        paddingVertical: 6,
+        borderRadius: radius.md,
+        backgroundColor: bg,
+        opacity: pressed ? 0.6 : 1,
+      })}
     >
-      <Ionicons name="checkmark-outline" size={12} color={t.success} />
-      <Text
-        style={[
-          typo.caption2,
-          { color: t.success, fontWeight: '600' },
-        ]}
-      >
-        Logged
-      </Text>
-    </View>
+      <Text style={[typo.footnote, { color, fontWeight: '600' }]}>{label}</Text>
+    </Pressable>
   );
 }
 
@@ -256,10 +257,14 @@ function MealCard({
   meal,
   isPast,
   onLogNow,
+  onUnlog,
+  onDelete,
 }: {
   meal: PlannedMeal;
   isPast: boolean;
   onLogNow: () => void;
+  onUnlog: () => void;
+  onDelete: () => void;
 }) {
   const t = useTheme();
   const time = formatPlannedTime(meal.planned_time);
@@ -332,30 +337,37 @@ function MealCard({
         </View>
       </View>
 
-      {meal.is_logged ? (
-        <LoggedBadge />
-      ) : (
-        !isPast && (
-          <Pressable
-            onPress={onLogNow}
-            style={({ pressed }) => ({
-              alignSelf: 'flex-start',
-              marginTop: space.md,
-              paddingHorizontal: 12,
-              paddingVertical: 6,
-              borderRadius: radius.md,
-              backgroundColor: t.primarySoft,
-              opacity: pressed ? 0.6 : 1,
-            })}
-          >
-            <Text
-              style={[typo.footnote, { color: t.primary, fontWeight: '600' }]}
-            >
-              Log now
-            </Text>
-          </Pressable>
-        )
-      )}
+      <View
+        style={{
+          flexDirection: 'row',
+          gap: space.sm,
+          marginTop: space.md,
+        }}
+      >
+        {meal.is_logged ? (
+          <MealActionButton
+            label="Unlog"
+            bg={t.warnSoft}
+            color={t.warn}
+            onPress={onUnlog}
+          />
+        ) : (
+          !isPast && (
+            <MealActionButton
+              label="Log now"
+              bg={t.primarySoft}
+              color={t.primary}
+              onPress={onLogNow}
+            />
+          )
+        )}
+        <MealActionButton
+          label="Delete"
+          bg={t.dangerSoft}
+          color={t.danger}
+          onPress={onDelete}
+        />
+      </View>
     </View>
   );
 }
@@ -479,6 +491,39 @@ export default function Meals() {
     } catch {
       toast.show('Could not log meal. Try again.', 'error');
     }
+  };
+
+  const handleUnlog = async (meal: PlannedMeal) => {
+    try {
+      await unlogPlannedMeal(meal.id);
+      await loadMeals();
+      toast.show('Marked as not logged', 'success');
+    } catch {
+      toast.show('Could not unlog. Try again.', 'error');
+    }
+  };
+
+  const handleDelete = (meal: PlannedMeal) => {
+    Alert.alert(
+      'Delete planned meal?',
+      `Remove ${meal.name} from your plan?`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await deletePlannedMeal(meal.id);
+              await loadMeals();
+              toast.show('Meal removed', 'success');
+            } catch {
+              toast.show('Could not delete. Try again.', 'error');
+            }
+          },
+        },
+      ],
+    );
   };
 
   const [shoppingOpen, setShoppingOpen] = useState(false);
@@ -740,6 +785,8 @@ export default function Meals() {
               meal={meal}
               isPast={isPast}
               onLogNow={() => void handleLogNow(meal)}
+              onUnlog={() => void handleUnlog(meal)}
+              onDelete={() => handleDelete(meal)}
             />
           ))
         )}

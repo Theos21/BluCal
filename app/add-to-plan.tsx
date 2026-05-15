@@ -30,7 +30,11 @@ import {
   getRecipesWithMacros,
   type RecipeWithMacros,
 } from '../lib/db';
-import { searchFoods, type FoodSearchResult } from '../lib/foodSearch';
+import {
+  autocompleteFoods,
+  searchFoods,
+  type FoodSearchResult,
+} from '../lib/foodSearch';
 
 // "HH:MM" in 24h for DB storage; display via formatTime.
 const PRESET_TIMES = [
@@ -141,16 +145,33 @@ export default function AddToPlan() {
   const insets = useSafeAreaInsets();
   const toast = useToast();
   const { user } = useAuth();
-  const params = useLocalSearchParams<{ date?: string }>();
+  const params = useLocalSearchParams<{
+    date?: string;
+    prefillName?: string;
+    prefillCal?: string;
+    prefillProtein?: string;
+    prefillCarbs?: string;
+    prefillFat?: string;
+    prefillPortion?: string;
+  }>();
   const date = typeof params.date === 'string' ? params.date : '';
+  const prefillName = typeof params.prefillName === 'string' ? params.prefillName : '';
+  const prefillCal = typeof params.prefillCal === 'string' ? params.prefillCal : '';
+  const prefillProtein =
+    typeof params.prefillProtein === 'string' ? params.prefillProtein : '';
+  const prefillCarbs =
+    typeof params.prefillCarbs === 'string' ? params.prefillCarbs : '';
+  const prefillFat = typeof params.prefillFat === 'string' ? params.prefillFat : '';
+  const prefillPortion =
+    typeof params.prefillPortion === 'string' ? params.prefillPortion : '';
 
-  const [mealName, setMealName] = useState('');
+  const [mealName, setMealName] = useState(prefillName);
   const [timeIdx, setTimeIdx] = useState<number>(DEFAULT_TIME_INDEX);
-  const [portion, setPortion] = useState('');
-  const [cal, setCal] = useState('');
-  const [protein, setProtein] = useState('');
-  const [carbs, setCarbs] = useState('');
-  const [fat, setFat] = useState('');
+  const [portion, setPortion] = useState(prefillPortion);
+  const [cal, setCal] = useState(prefillCal);
+  const [protein, setProtein] = useState(prefillProtein);
+  const [carbs, setCarbs] = useState(prefillCarbs);
+  const [fat, setFat] = useState(prefillFat);
   const [selectedRecipe, setSelectedRecipe] = useState<RecipeWithMacros | null>(
     null,
   );
@@ -160,6 +181,7 @@ export default function AddToPlan() {
 
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<FoodSearchResult[]>([]);
+  const [suggestions, setSuggestions] = useState<string[]>([]);
   const [searching, setSearching] = useState(false);
   const searchTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -174,8 +196,16 @@ export default function AddToPlan() {
     if (searchTimeout.current) clearTimeout(searchTimeout.current);
     if (!text.trim()) {
       setSearchResults([]);
+      setSuggestions([]);
       setSearching(false);
       return;
+    }
+    if (text.trim().length > 1) {
+      autocompleteFoods(text)
+        .then(setSuggestions)
+        .catch(() => setSuggestions([]));
+    } else {
+      setSuggestions([]);
     }
     searchTimeout.current = setTimeout(async () => {
       try {
@@ -196,10 +226,22 @@ export default function AddToPlan() {
     setProtein(String(Math.round(food.protein_g)));
     setCarbs(String(Math.round(food.carbs_g)));
     setFat(String(Math.round(food.fat_g)));
-    setPortion(`${food.serving_size}${food.serving_unit}`);
+    setPortion(food.serving_description || `${food.serving_size}${food.serving_unit}`);
     setSelectedRecipe(null);
     setSearchResults([]);
+    setSuggestions([]);
     setSearchQuery('');
+  };
+
+  const handleOpenBarcode = () => {
+    router.push({
+      pathname: '/barcode-scanner',
+      params: { returnTo: 'add-to-plan', date },
+    });
+  };
+
+  const handleOpenBluAI = () => {
+    router.push('/bluai');
   };
 
   useEffect(() => {
@@ -355,6 +397,84 @@ export default function AddToPlan() {
             />
             {searching && <ActivityIndicator color={t.primary} size="small" />}
           </View>
+
+          {/* Barcode + BluAI quick actions */}
+          <View
+            style={{
+              flexDirection: 'row',
+              gap: space.sm,
+              marginHorizontal: space.lg,
+              marginTop: space.sm,
+            }}
+          >
+            <Pressable
+              onPress={handleOpenBarcode}
+              style={({ pressed }) => ({
+                flex: 1,
+                height: 44,
+                borderRadius: radius.lg,
+                backgroundColor: t.surface2,
+                flexDirection: 'row',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: 6,
+                opacity: pressed ? 0.6 : 1,
+              })}
+            >
+              <Ionicons name="barcode-outline" size={18} color={t.text} />
+              <Text style={[typo.subhead, { color: t.text }]}>Scan barcode</Text>
+            </Pressable>
+            <Pressable
+              onPress={handleOpenBluAI}
+              style={({ pressed }) => ({
+                flex: 1,
+                height: 44,
+                borderRadius: radius.lg,
+                backgroundColor: t.surface2,
+                flexDirection: 'row',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: 6,
+                opacity: pressed ? 0.6 : 1,
+              })}
+            >
+              <Ionicons name="sparkles-outline" size={18} color={t.primary} />
+              <Text style={[typo.subhead, { color: t.text }]}>BluAI</Text>
+            </Pressable>
+          </View>
+
+          {/* Autocomplete suggestion chips */}
+          {suggestions.length > 0 && searchResults.length === 0 && (
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={{
+                paddingHorizontal: space.lg,
+                paddingVertical: space.xs,
+                gap: space.sm,
+              }}
+            >
+              {suggestions.map((s) => (
+                <Pressable
+                  key={s}
+                  onPress={() => {
+                    setSearchQuery(s);
+                    handleSearch(s);
+                    setSuggestions([]);
+                  }}
+                  style={({ pressed }) => ({
+                    backgroundColor: t.surface2,
+                    borderRadius: radius.pill,
+                    paddingHorizontal: space.md,
+                    paddingVertical: space.xs,
+                    opacity: pressed ? 0.6 : 1,
+                  })}
+                >
+                  <Text style={[typo.caption1, { color: t.textSec }]}>{s}</Text>
+                </Pressable>
+              ))}
+            </ScrollView>
+          )}
 
           {searchResults.length > 0 && (
             <View

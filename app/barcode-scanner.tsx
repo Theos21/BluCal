@@ -15,7 +15,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { router } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import {
   CameraView,
   useCameraPermissions,
@@ -609,6 +609,9 @@ export default function BarcodeScanner() {
   const [permission, requestPermission] = useCameraPermissions();
   const toast = useToast();
   const { user } = useAuth();
+  const params = useLocalSearchParams<{ returnTo?: string; date?: string }>();
+  const returnTo = typeof params.returnTo === 'string' ? params.returnTo : '';
+  const returnDate = typeof params.date === 'string' ? params.date : '';
 
   const [torchOn, setTorchOn] = useState(false);
   const [scannedProduct, setScannedProduct] = useState<FoodSearchResult | null>(null);
@@ -642,6 +645,21 @@ export default function BarcodeScanner() {
     setLastBarcode(data);
     try {
       const product = await lookupBarcode(data);
+      if (product && returnTo === 'add-to-plan') {
+        router.replace({
+          pathname: '/add-to-plan',
+          params: {
+            date: returnDate,
+            prefillName: product.name,
+            prefillCal: String(product.calories),
+            prefillProtein: String(product.protein_g),
+            prefillCarbs: String(product.carbs_g),
+            prefillFat: String(product.fat_g),
+            prefillPortion: product.serving_description,
+          },
+        });
+        return;
+      }
       if (product) {
         setScannedProduct(product);
         setNotFound(false);

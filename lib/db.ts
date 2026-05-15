@@ -708,6 +708,14 @@ export const deletePlannedMeal = async (id: string): Promise<void> => {
   if (error) throw error;
 };
 
+export const unlogPlannedMeal = async (id: string): Promise<void> => {
+  const { error } = await supabase
+    .from('planned_meals')
+    .update({ is_logged: false })
+    .eq('id', id);
+  if (error) throw error;
+};
+
 // ── Progress photos ──────────────────────────────────────────────────────────
 // The `progress-photos` storage bucket is private (RLS-gated to the owner).
 // Reads require signed URLs, which we batch-mint here so the photo grid can

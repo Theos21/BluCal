@@ -921,6 +921,42 @@ export default function Profile() {
     }
   };
 
+  const handleDeleteAccount = () => {
+    if (!user) return;
+    Alert.alert(
+      'Delete account',
+      'This will permanently delete your account and all your data. This cannot be undone.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete account',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await supabase.from('food_entries').delete().eq('user_id', user.id);
+              await supabase.from('weight_entries').delete().eq('user_id', user.id);
+              await supabase.from('water_entries').delete().eq('user_id', user.id);
+              await supabase.from('macro_targets').delete().eq('user_id', user.id);
+              await supabase.from('feeling_entries').delete().eq('user_id', user.id);
+              await supabase.from('measurements').delete().eq('user_id', user.id);
+              await supabase.from('planned_meals').delete().eq('user_id', user.id);
+              await supabase.from('recipes').delete().eq('user_id', user.id);
+              await supabase.from('custom_foods').delete().eq('user_id', user.id);
+              await supabase.from('profiles').delete().eq('id', user.id);
+              await supabase.auth.signOut();
+              router.replace('/(auth)/welcome');
+            } catch {
+              Alert.alert(
+                'Error',
+                'Could not delete account. Please contact support@blucal.app',
+              );
+            }
+          },
+        },
+      ],
+    );
+  };
+
   const displayName = profile?.name ?? 'Your Name';
   const initials = displayName
     .split(' ')
@@ -1120,6 +1156,20 @@ export default function Profile() {
             icon="document-outline"
             label="Terms of service"
             onPress={handleTOS}
+            isLast
+          />
+        </Section>
+
+        {/* Account */}
+        <SectionLabel label="Account" />
+        <Section>
+          <SettingsRow
+            icon="trash-outline"
+            label="Delete account"
+            value="Permanently delete all data"
+            valueColor={t.danger}
+            danger
+            onPress={handleDeleteAccount}
             isLast
           />
         </Section>

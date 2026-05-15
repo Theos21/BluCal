@@ -124,9 +124,10 @@ Deno.serve(async (req) => {
       });
     }
 
-    throw new Error('Invalid mode — use search or barcode');
+    throw new Error('Invalid mode. Use search or barcode.');
   } catch (error) {
-    return new Response(JSON.stringify({ error: error.message }), {
+    const message = error instanceof Error ? error.message : String(error);
+    return new Response(JSON.stringify({ error: message }), {
       status: 500,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });

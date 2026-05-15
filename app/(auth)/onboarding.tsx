@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -476,84 +476,6 @@ function TargetsEditor({
   );
 }
 
-function ProjectionCard({
-  t,
-  goal,
-  weight,
-  goalWeight,
-  isMetric,
-  weeklyChangeKg,
-}: {
-  t: Theme;
-  goal: string | null;
-  weight: string;
-  goalWeight: string;
-  isMetric: boolean;
-  weeklyChangeKg: number;
-}) {
-  const unit = isMetric ? 'kg' : 'lbs';
-
-  let body: string;
-  let bodyColor: string;
-
-  if (goal !== 'lose_fat' && goal !== 'build_muscle') {
-    return null;
-  }
-
-  if (!weight || !goalWeight) {
-    body = 'Set a goal weight on step 2 to see your projection.';
-    bodyColor = t.textTer;
-  } else {
-    const currentKg = isMetric
-      ? Number(weight)
-      : Number(weight) * 0.453592;
-    const goalKg = isMetric
-      ? Number(goalWeight)
-      : Number(goalWeight) * 0.453592;
-    const diffKg = Math.abs(goalKg - currentKg);
-    const absWeekly = Math.abs(weeklyChangeKg);
-    if (!Number.isFinite(diffKg) || absWeekly === 0 || diffKg === 0) {
-      body = 'Set a goal weight on step 2 to see your projection.';
-      bodyColor = t.textTer;
-    } else {
-      const weeks = Math.max(1, Math.round(diffKg / absWeekly));
-      const months = (weeks / 4.33).toFixed(1);
-      body = `At this pace you will reach ${goalWeight} ${unit} in approximately ${weeks} weeks (${months} months).`;
-      bodyColor = t.textSec;
-    }
-  }
-
-  return (
-    <View
-      style={{
-        flexDirection: 'row',
-        alignItems: 'flex-start',
-        gap: space.sm,
-        backgroundColor: t.surface2,
-        borderRadius: radius.lg,
-        paddingHorizontal: space.lg,
-        paddingVertical: space.md,
-        marginTop: space.md,
-      }}
-    >
-      <Ionicons
-        name="calendar-outline"
-        size={16}
-        color={t.textSec}
-        style={{ marginTop: 2 }}
-      />
-      <Text
-        style={[
-          typo.footnote,
-          { color: bodyColor, flex: 1 },
-        ]}
-      >
-        {body}
-      </Text>
-    </View>
-  );
-}
-
 function mapSexToDb(sex: Sex | null): BiologicalSex | null {
   if (!sex) return null;
   return sex.toLowerCase() as BiologicalSex;
@@ -801,6 +723,25 @@ export default function Onboarding() {
       return next;
     });
   };
+
+  const goalDate = useMemo(() => {
+    if (!targets.weeklyChangeKg || !weight || !goalWeight) return null;
+    const currentKg = isMetric ? Number(weight) : Number(weight) * 0.453592;
+    const goalKg = isMetric
+      ? Number(goalWeight)
+      : Number(goalWeight) * 0.453592;
+    if (!Number.isFinite(currentKg) || !Number.isFinite(goalKg)) return null;
+    const diffKg = Math.abs(goalKg - currentKg);
+    if (diffKg < 0.5) return null;
+    const weeks = Math.max(
+      1,
+      Math.round(diffKg / Math.abs(targets.weeklyChangeKg)),
+    );
+    const date = new Date();
+    date.setDate(date.getDate() + weeks * 7);
+    const months = Math.max(1, Math.round(weeks / 4.33));
+    return { weeks, months, date };
+  }, [targets.weeklyChangeKg, weight, goalWeight, isMetric]);
 
   return (
     <SafeAreaView
@@ -1176,14 +1117,54 @@ export default function Onboarding() {
                     ))}
                   </View>
 
-                  <ProjectionCard
-                    t={t}
-                    goal={goal}
-                    weight={weight}
-                    goalWeight={goalWeight}
-                    isMetric={isMetric}
-                    weeklyChangeKg={targets.weeklyChangeKg}
-                  />
+                  {goalDate && (
+                    <View
+                      style={{
+                        backgroundColor: t.primarySoft,
+                        borderRadius: radius.lg,
+                        padding: space.md,
+                        marginTop: space.md,
+                        alignItems: 'center',
+                      }}
+                    >
+                      <Text
+                        style={[
+                          typo.caption1,
+                          {
+                            color: t.primary,
+                            fontWeight: '600',
+                            marginBottom: 4,
+                          },
+                        ]}
+                      >
+                        ESTIMATED GOAL DATE
+                      </Text>
+                      <Text
+                        style={[
+                          typo.title1,
+                          {
+                            color: t.primary,
+                            fontWeight: '800',
+                            letterSpacing: -1,
+                          },
+                        ]}
+                      >
+                        {goalDate.date.toLocaleDateString('en-US', {
+                          month: 'long',
+                          day: 'numeric',
+                          year: 'numeric',
+                        })}
+                      </Text>
+                      <Text
+                        style={[
+                          typo.subhead,
+                          { color: t.textSec, marginTop: 4 },
+                        ]}
+                      >
+                        {`${goalDate.weeks} weeks (${goalDate.months} ${goalDate.months === 1 ? 'month' : 'months'}) from today`}
+                      </Text>
+                    </View>
+                  )}
                 </View>
               )}
 

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -23,8 +23,13 @@ import {
   calculateMomentumScore,
   getFoodEntriesForDateRange,
   getStreak,
+  getWeightEntries,
   updateProfile,
 } from '../../lib/db';
+import {
+  calculateAge,
+  calculateMacroTargets,
+} from '../../lib/macroCalculator';
 import { supabase } from '../../lib/supabase';
 // HealthKit integration disabled until native linking is fixed via Xcode.
 // import { initializeHealthKit, isAvailable } from '../../lib/appleHealth';
@@ -37,7 +42,7 @@ import {
 } from '../../lib/notifications';
 import Toast from '../../components/Toast';
 import { useToast } from '../../lib/useToast';
-import type { Goal, Pace } from '../../lib/types';
+import type { Goal, Pace, WeightEntry } from '../../lib/types';
 
 const APP_VERSION = '1.0.0';
 
@@ -620,6 +625,7 @@ export default function Profile() {
   const [isMetric, setIsMetric] = useState(false);
   const [streak, setStreak] = useState(0);
   const [momentumScore, setMomentumScore] = useState(0);
+  const [weightEntries, setWeightEntries] = useState<WeightEntry[]>([]);
   const [, setLoading] = useState(true);
   const [logReminder, setLogReminder] = useState(
     profile?.notif_log_reminder ?? true,
@@ -810,18 +816,81 @@ export default function Profile() {
     }
     try {
       setLoading(true);
-      const [currentStreak, score] = await Promise.all([
+      const [currentStreak, score, weights] = await Promise.all([
         getStreak(user.id),
         calculateMomentumScore(user.id, profile?.goal ?? 'maintain'),
+        getWeightEntries(user.id, 14),
       ]);
       setStreak(currentStreak);
       setMomentumScore(score);
+      // getWeightEntries returns ascending — reverse so [0] is the most recent
+      setWeightEntries(weights.slice().reverse());
     } catch (e) {
       console.error(e);
     } finally {
       setLoading(false);
     }
   };
+
+  const goalDateInfo = useMemo<{
+    date: Date;
+    weeks: number;
+    months: number;
+    percentComplete: number;
+  } | null>(() => {
+    if (
+      !profile?.goal_weight_kg ||
+      !profile?.pace ||
+      !profile?.activity_level ||
+      !profile?.goal
+    ) {
+      return null;
+    }
+    if (weightEntries.length === 0) return null;
+
+    const latestKg = Number(weightEntries[0]?.weight_kg ?? 0);
+    if (!latestKg) return null;
+
+    const goalKg = profile.goal_weight_kg;
+    const diffKg = Math.abs(goalKg - latestKg);
+    if (diffKg < 0.5) return null;
+
+    const { weeklyChangeKg } = calculateMacroTargets(
+      latestKg,
+      profile.height_cm ?? 170,
+      calculateAge(profile.birthday),
+      profile.biological_sex ?? 'male',
+      profile.activity_level,
+      profile.goal,
+      profile.pace,
+    );
+
+    if (!weeklyChangeKg) return null;
+
+    const weeks = Math.max(1, Math.round(diffKg / Math.abs(weeklyChangeKg)));
+    const date = new Date();
+    date.setDate(date.getDate() + weeks * 7);
+    const months = Math.max(1, Math.round(weeks / 4.33));
+
+    // Use the oldest weight entry within the 14-day window as the starting
+    // point. With only one entry available this resolves to latest === start,
+    // so percentComplete sits at 0 until the user logs a second weight.
+    const startingKg = Number(
+      weightEntries[weightEntries.length - 1]?.weight_kg ?? latestKg,
+    );
+    const totalDistance = Math.abs(goalKg - startingKg);
+    const remainingDistance = diffKg;
+    const progressed = Math.max(0, totalDistance - remainingDistance);
+    const percentComplete =
+      totalDistance > 0
+        ? Math.max(
+            0,
+            Math.min(100, Math.round((progressed / totalDistance) * 100)),
+          )
+        : 0;
+
+    return { date, weeks, months, percentComplete };
+  }, [profile, weightEntries]);
 
   useFocusEffect(
     useCallback(() => {
@@ -1010,6 +1079,86 @@ export default function Profile() {
 
         {/* Goals */}
         <SectionLabel label="Goals" />
+        {goalDateInfo && (
+          <View
+            style={{
+              backgroundColor: t.surface,
+              borderRadius: radius.lg,
+              borderWidth: 1,
+              borderColor: t.hairline,
+              padding: space.md,
+              marginHorizontal: space.lg,
+              marginBottom: space.sm,
+            }}
+          >
+            <Text
+              style={[
+                typo.caption1,
+                {
+                  color: t.textTer,
+                  fontWeight: '600',
+                  marginBottom: space.sm,
+                },
+              ]}
+            >
+              GOAL PROGRESS
+            </Text>
+            <View
+              style={{
+                flexDirection: 'row',
+                justifyContent: 'space-between',
+                alignItems: 'flex-start',
+              }}
+            >
+              <View>
+                <Text style={[typo.title2, { color: t.text, fontWeight: '700' }]}>
+                  {goalDateInfo.date.toLocaleDateString('en-US', {
+                    month: 'long',
+                    day: 'numeric',
+                  })}
+                </Text>
+                <Text style={[typo.caption1, { color: t.textSec }]}>
+                  {`${goalDateInfo.date.getFullYear()} · ${goalDateInfo.weeks}w (${goalDateInfo.months}mo)`}
+                </Text>
+              </View>
+              <View style={{ alignItems: 'flex-end' }}>
+                <Text
+                  style={[typo.subhead, { color: t.primary, fontWeight: '700' }]}
+                >
+                  {profile?.is_metric
+                    ? `${profile.goal_weight_kg?.toFixed(1)} kg`
+                    : `${((profile?.goal_weight_kg ?? 0) * 2.20462).toFixed(1)} lbs`}
+                </Text>
+                <Text style={[typo.caption2, { color: t.textTer }]}>
+                  goal weight
+                </Text>
+              </View>
+            </View>
+            <View
+              style={{
+                height: 6,
+                backgroundColor: t.surface2,
+                borderRadius: 3,
+                marginTop: space.sm,
+                overflow: 'hidden',
+              }}
+            >
+              <View
+                style={{
+                  height: 6,
+                  width: `${goalDateInfo.percentComplete}%`,
+                  backgroundColor: t.primary,
+                  borderRadius: 3,
+                }}
+              />
+            </View>
+            <Text
+              style={[typo.caption2, { color: t.textTer, marginTop: 4 }]}
+            >
+              Based on your current weight trend
+            </Text>
+          </View>
+        )}
         <Section>
           <SettingsRow
             label="Current goal"

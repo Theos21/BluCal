@@ -555,6 +555,22 @@ export const getCustomFoods = async (
   return (data ?? []) as CustomFood[];
 };
 
+// Public community foods matching a search query, newest first. Backed by the
+// "public custom foods are viewable by all" RLS policy on custom_foods.
+export const getCommunityFoods = async (
+  query: string,
+): Promise<CustomFood[]> => {
+  const { data, error } = await supabase
+    .from('custom_foods')
+    .select('*')
+    .eq('is_public', true)
+    .ilike('name', `%${query}%`)
+    .order('created_at', { ascending: false })
+    .limit(20);
+  if (error) throw error;
+  return (data ?? []) as CustomFood[];
+};
+
 export const addCustomFood = async (
   food: Omit<CustomFood, 'id' | 'created_at'>,
 ): Promise<CustomFood> => {

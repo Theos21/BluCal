@@ -291,3 +291,7 @@ create policy "users can delete own photos"
     bucket_id = 'progress-photos'
     and auth.uid()::text = (storage.foldername(name))[1]
   );
+
+-- Community foods preference toggle (added later)
+alter table public.profiles
+  add column if not exists show_community_foods boolean default true;

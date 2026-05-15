@@ -1133,6 +1133,23 @@ export default function Profile() {
           />
         </Section>
 
+        {/* Food & logging */}
+        <SectionLabel label="Food & logging" />
+        <Section>
+          <SettingsRow
+            label="Show community foods"
+            icon="people-outline"
+            value={profile?.show_community_foods !== false ? 'On' : 'Off'}
+            onPress={async () => {
+              if (!user) return;
+              const newVal = profile?.show_community_foods === false;
+              await updateProfile(user.id, { show_community_foods: newVal });
+              await refreshProfile();
+            }}
+            isLast
+          />
+        </Section>
+
         {/* Notifications */}
         <SectionLabel label="Notifications" />
         <Section>

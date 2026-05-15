@@ -22,6 +22,8 @@ import { useToast } from '../lib/useToast';
 import { useAuth } from '../lib/AuthContext';
 import {
   addFoodEntry,
+  getCommunityFoods,
+  getCustomFoods,
   getRecentFoods,
   getRecipesWithMacros,
   type RecipeWithMacros,
@@ -32,13 +34,14 @@ import {
   type FoodSearchResult,
 } from '../lib/foodSearch';
 import { sessionState } from '../lib/sessionState';
-import type { FoodEntry } from '../lib/types';
+import type { CustomFood, FoodEntry } from '../lib/types';
 
 type RichRow = {
   id: string;
   name: string;
   brand?: string | null;
   hint?: string | null;
+  badge?: string;
   calories: number;
   protein_g: number;
   carbs_g: number;
@@ -331,12 +334,35 @@ function RichFoodRowItem({
         </View>
 
         <View style={{ flex: 1, gap: 2, minWidth: 0 }}>
-          <Text
-            style={[typo.subhead, { color: t.text, fontWeight: '600' }]}
-            numberOfLines={1}
+          <View
+            style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}
           >
-            {finalName}
-          </Text>
+            <Text
+              style={[
+                typo.subhead,
+                { color: t.text, fontWeight: '600', flexShrink: 1 },
+              ]}
+              numberOfLines={1}
+            >
+              {finalName}
+            </Text>
+            {row.badge && (
+              <View
+                style={{
+                  backgroundColor: t.tealSoft,
+                  borderRadius: 6,
+                  paddingHorizontal: 6,
+                  paddingVertical: 2,
+                }}
+              >
+                <Text
+                  style={{ fontSize: 10, fontWeight: '700', color: t.teal }}
+                >
+                  {row.badge}
+                </Text>
+              </View>
+            )}
+          </View>
           {subtitle && (
             <Text
               style={[
@@ -508,6 +534,142 @@ function RecipesEmptyState() {
   );
 }
 
+function MyFoodsEmptyState() {
+  const t = useTheme();
+  return (
+    <View style={{ alignItems: 'center', paddingVertical: space.xl }}>
+      <Text style={[typo.footnote, { color: t.textTer }]}>
+        No custom foods yet
+      </Text>
+    </View>
+  );
+}
+
+function CommunityFoodsSection({
+  foods,
+  onSelect,
+}: {
+  foods: CustomFood[];
+  onSelect: (food: CustomFood) => void;
+}) {
+  const t = useTheme();
+  return (
+    <View style={{ marginTop: space.lg }}>
+      <View
+        style={{
+          flexDirection: 'row',
+          alignItems: 'center',
+          gap: space.sm,
+          paddingHorizontal: space.lg,
+          marginBottom: space.sm,
+        }}
+      >
+        <Ionicons name="people-outline" size={14} color={t.teal} />
+        <Text
+          style={[
+            typo.caption1,
+            {
+              color: t.teal,
+              fontWeight: '700',
+              textTransform: 'uppercase',
+              letterSpacing: 0.5,
+            },
+          ]}
+        >
+          BluCal Community
+        </Text>
+      </View>
+      {foods.map((food) => (
+        <Pressable
+          key={food.id}
+          onPress={() => onSelect(food)}
+          style={({ pressed }) => ({
+            flexDirection: 'row',
+            alignItems: 'center',
+            padding: space.md,
+            paddingHorizontal: space.lg,
+            gap: space.md,
+            backgroundColor: pressed ? t.surface2 : 'transparent',
+          })}
+        >
+          <View
+            style={{
+              width: 46,
+              height: 46,
+              borderRadius: 14,
+              backgroundColor: t.tealSoft,
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}
+          >
+            <Ionicons name="people-outline" size={20} color={t.teal} />
+          </View>
+          <View style={{ flex: 1 }}>
+            <View
+              style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}
+            >
+              <Text
+                style={[
+                  typo.subhead,
+                  { color: t.text, fontWeight: '600', flexShrink: 1 },
+                ]}
+                numberOfLines={1}
+              >
+                {food.name}
+              </Text>
+              <View
+                style={{
+                  backgroundColor: t.tealSoft,
+                  borderRadius: 6,
+                  paddingHorizontal: 6,
+                  paddingVertical: 2,
+                }}
+              >
+                <Text
+                  style={{ fontSize: 10, fontWeight: '700', color: t.teal }}
+                >
+                  Community
+                </Text>
+              </View>
+            </View>
+            {food.brand && (
+              <Text style={[typo.caption1, { color: t.textSec }]}>
+                {food.brand}
+              </Text>
+            )}
+            <View style={{ flexDirection: 'row', gap: 6, marginTop: 2 }}>
+              <Text style={[typo.caption2, { color: t.textTer }]}>
+                {food.calories} cal
+              </Text>
+              <Text style={[typo.caption2, { color: t.primary }]}>
+                {Math.round(food.protein_g)}g P
+              </Text>
+              <Text style={[typo.caption2, { color: t.warn }]}>
+                {Math.round(food.carbs_g)}g C
+              </Text>
+              <Text style={[typo.caption2, { color: t.teal }]}>
+                {Math.round(food.fat_g)}g F
+              </Text>
+            </View>
+          </View>
+          <View
+            style={{
+              width: 34,
+              height: 34,
+              borderRadius: 17,
+              backgroundColor: t.teal,
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}
+          >
+            <Ionicons name="add" size={22} color={t.textOnPrim} />
+          </View>
+        </Pressable>
+      ))}
+    </View>
+  );
+}
+
 function SearchResultsList({
   results,
   onSelect,
@@ -575,10 +737,12 @@ function EmptySearchState({ query }: { query: string }) {
 export default function LogFood() {
   const t = useTheme();
   const toast = useToast();
-  const { user } = useAuth();
+  const { user, profile } = useAuth();
 
   const [recentFoods, setRecentFoods] = useState<FoodEntry[]>([]);
   const [myRecipes, setMyRecipes] = useState<RecipeWithMacros[]>([]);
+  const [myFoods, setMyFoods] = useState<CustomFood[]>([]);
+  const [communityFoods, setCommunityFoods] = useState<CustomFood[]>([]);
   const [loading, setLoading] = useState(true);
   const [loggingRecipe, setLoggingRecipe] = useState<RecipeWithMacros | null>(
     null,
@@ -652,10 +816,15 @@ export default function LogFood() {
       setLoading(false);
       return;
     }
-    Promise.all([getRecentFoods(user.id), getRecipesWithMacros(user.id)])
-      .then(([recent, recipes]) => {
+    Promise.all([
+      getRecentFoods(user.id),
+      getRecipesWithMacros(user.id),
+      getCustomFoods(user.id),
+    ])
+      .then(([recent, recipes, custom]) => {
         setRecentFoods(recent);
         setMyRecipes(recipes);
+        setMyFoods(custom);
       })
       .catch(console.error)
       .finally(() => setLoading(false));
@@ -673,6 +842,7 @@ export default function LogFood() {
     if (!text.trim()) {
       setSearchResults([]);
       setSuggestions([]);
+      setCommunityFoods([]);
       setSearching(false);
       return;
     }
@@ -692,6 +862,13 @@ export default function LogFood() {
         console.error(e);
       } finally {
         setSearching(false);
+      }
+      if (profile?.show_community_foods !== false && text.trim().length > 1) {
+        getCommunityFoods(text)
+          .then(setCommunityFoods)
+          .catch(() => setCommunityFoods([]));
+      } else {
+        setCommunityFoods([]);
       }
     }, 500);
   };
@@ -752,6 +929,38 @@ export default function LogFood() {
       });
       sessionState.setJustLoggedFood(entry.name);
       toast.show(`Added: ${entry.name}`, 'success');
+      setTimeout(() => router.back(), 800);
+    } catch {
+      toast.show('Could not add food. Try again.', 'error');
+    }
+  };
+
+  // Logs a custom food (own or community) as a single food entry.
+  const handleSelectCustomFood = async (food: CustomFood) => {
+    if (!user) return;
+    try {
+      await addFoodEntry({
+        user_id: user.id,
+        logged_at: new Date().toISOString(),
+        name: food.name,
+        portion_description: `${food.serving_size}${food.serving_unit}`,
+        quantity: 1,
+        unit: food.serving_unit,
+        calories: food.calories,
+        protein_g: food.protein_g,
+        carbs_g: food.carbs_g,
+        fat_g: food.fat_g,
+        fiber_g: food.fiber_g ?? 0,
+        sugar_g: food.sugar_g ?? 0,
+        sodium_mg: food.sodium_mg ?? 0,
+        saturated_fat_g: food.saturated_fat_g ?? 0,
+        cholesterol_mg: food.cholesterol_mg ?? 0,
+        food_database_id: null,
+        barcode: food.barcode,
+        source: 'search',
+      });
+      sessionState.setJustLoggedFood(food.name);
+      toast.show(`Added: ${food.name}`, 'success');
       setTimeout(() => router.back(), 800);
     } catch {
       toast.show('Could not add food. Try again.', 'error');
@@ -820,6 +1029,18 @@ export default function LogFood() {
     carbs_g: Number(recipe.perServing.carbs_g),
     fat_g: Number(recipe.perServing.fat_g),
     onAdd: () => handleLogRecipe(recipe),
+  }));
+
+  const myFoodRows: RichRow[] = myFoods.map((food) => ({
+    id: food.id,
+    name: food.name,
+    brand: food.brand,
+    badge: food.is_public ? 'Shared' : undefined,
+    calories: food.calories,
+    protein_g: Number(food.protein_g),
+    carbs_g: Number(food.carbs_g),
+    fat_g: Number(food.fat_g),
+    onAdd: () => void handleSelectCustomFood(food),
   }));
 
   const isSearching = searchQuery.trim().length > 0;
@@ -914,6 +1135,12 @@ export default function LogFood() {
                 onSelect={handleSelectFood}
               />
             )}
+            {!searching && communityFoods.length > 0 && (
+              <CommunityFoodsSection
+                foods={communityFoods}
+                onSelect={handleSelectCustomFood}
+              />
+            )}
           </>
         ) : loading ? (
           <View
@@ -930,6 +1157,11 @@ export default function LogFood() {
               label="Recents"
               rows={recentRows}
               emptyState={<RecentsEmptyState />}
+            />
+            <Section
+              label="My foods"
+              rows={myFoodRows}
+              emptyState={<MyFoodsEmptyState />}
             />
             <Section
               label="My recipes"

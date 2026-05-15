@@ -897,7 +897,7 @@ export default function Profile() {
 
   const handleTOS = () => {
     void Linking.openURL(
-      'https://github.com/Theos21/BluCal/blob/main/PRIVACY.md',
+      'https://github.com/Theos21/BluCal/blob/main/TERMS.md',
     );
   };
 
@@ -922,7 +922,6 @@ export default function Profile() {
   };
 
   const handleDeleteAccount = () => {
-    if (!user) return;
     Alert.alert(
       'Delete account',
       'This will permanently delete your account and all your data. This cannot be undone.',
@@ -933,16 +932,8 @@ export default function Profile() {
           style: 'destructive',
           onPress: async () => {
             try {
-              await supabase.from('food_entries').delete().eq('user_id', user.id);
-              await supabase.from('weight_entries').delete().eq('user_id', user.id);
-              await supabase.from('water_entries').delete().eq('user_id', user.id);
-              await supabase.from('macro_targets').delete().eq('user_id', user.id);
-              await supabase.from('feeling_entries').delete().eq('user_id', user.id);
-              await supabase.from('measurements').delete().eq('user_id', user.id);
-              await supabase.from('planned_meals').delete().eq('user_id', user.id);
-              await supabase.from('recipes').delete().eq('user_id', user.id);
-              await supabase.from('custom_foods').delete().eq('user_id', user.id);
-              await supabase.from('profiles').delete().eq('id', user.id);
+              const { error } = await supabase.functions.invoke('delete-account');
+              if (error) throw error;
               await supabase.auth.signOut();
               router.replace('/(auth)/welcome');
             } catch {

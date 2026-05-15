@@ -26,7 +26,8 @@ import {
   updateProfile,
 } from '../../lib/db';
 import { supabase } from '../../lib/supabase';
-import { initializeHealthKit, isAvailable } from '../../lib/appleHealth';
+// HealthKit integration disabled until native linking is fixed via Xcode.
+// import { initializeHealthKit, isAvailable } from '../../lib/appleHealth';
 import {
   cancelAllNotifications,
   scheduleDailyLogReminder,
@@ -841,17 +842,6 @@ export default function Profile() {
     }
   };
 
-  const handleConnectedScale = () => {
-    Alert.alert(
-      'Smart Scale',
-      "BluCal reads weight data from Apple Health. To connect your smart scale (Renpho, Withings, Fitbit, etc.):\n\n1. Open your scale's app\n2. Enable Apple Health sync in the scale app settings\n3. Connect Apple Health in BluCal\n\nYour weight will then sync to BluCal automatically after each weigh-in.",
-      [
-        { text: 'Connect Apple Health', onPress: handleAppleHealth },
-        { text: 'OK', style: 'cancel' },
-      ],
-    );
-  };
-
   const handleExportData = async () => {
     if (!user) return;
     try {
@@ -928,33 +918,6 @@ export default function Profile() {
       router.replace('/(auth)/welcome');
     } catch {
       Alert.alert('Error', 'Could not sign out. Please try again.');
-    }
-  };
-
-  const handleAppleHealth = async () => {
-    try {
-      const available = await isAvailable();
-      if (!available) {
-        Alert.alert(
-          'Apple Health',
-          'Apple Health is not available on this device. Make sure you are on a real iPhone and the Health app is installed.',
-        );
-        return;
-      }
-      const initialized = await initializeHealthKit();
-      if (initialized) {
-        toast.show('Apple Health connected', 'success');
-        await updateProfile(user!.id, { apple_health_connected: true });
-        await refreshProfile();
-      } else {
-        Alert.alert(
-          'Permission denied',
-          'You can enable Apple Health access in iPhone Settings → Privacy → Health → BluCal.',
-        );
-      }
-    } catch (e) {
-      console.error('Apple Health error:', e);
-      Alert.alert('Error', 'Could not connect to Apple Health. Please try again.');
     }
   };
 
@@ -1097,24 +1060,12 @@ export default function Profile() {
         {/* Integrations */}
         <SectionLabel label="Integrations" />
         <Section>
-          <SettingsRow
-            icon="heart-outline"
-            label="Apple Health"
-            value={profile?.apple_health_connected ? 'Connected' : 'Not connected'}
-            valueColor={profile?.apple_health_connected ? t.success : undefined}
-            onPress={handleAppleHealth}
-          />
+          {/* TODO: Re-enable Apple Health when HealthKit linking is fixed via Xcode */}
           <SettingsRow
             icon="watch-outline"
             label="Apple Watch"
             value="Coming soon"
             valueColor={t.textTer}
-          />
-          <SettingsRow
-            icon="speedometer-outline"
-            label="Connected scale"
-            value="Not connected"
-            onPress={handleConnectedScale}
             isLast
           />
         </Section>

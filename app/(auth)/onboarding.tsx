@@ -20,7 +20,6 @@ import { useAuth } from '../../lib/AuthContext';
 import { addWeightEntry, setMacroTarget, upsertProfile } from '../../lib/db';
 import Toast from '../../components/Toast';
 import { useToast } from '../../lib/useToast';
-import { isAvailable, requestPermissions } from '../../lib/appleHealth';
 import type { ActivityLevel, BiologicalSex, Goal, Pace } from '../../lib/types';
 import {
   birthdayFromAge,
@@ -28,7 +27,7 @@ import {
   type Targets,
 } from '../../lib/macroCalculator';
 
-const TOTAL_STEPS = 8;
+const TOTAL_STEPS = 7;
 
 type Sex = 'Male' | 'Female' | 'Other';
 type IconName = keyof typeof Ionicons.glyphMap;
@@ -584,20 +583,7 @@ export default function Onboarding() {
   const { user, profile, refreshProfile } = useAuth();
   const [step, setStep] = useState(0);
   const [saving, setSaving] = useState(false);
-  const [healthAvailable, setHealthAvailable] = useState(false);
   const progressAnim = useRef(new Animated.Value(1 / TOTAL_STEPS)).current;
-
-  // Probe HealthKit availability when the user reaches the Apple Health step.
-  // On simulator / Expo Go / unlinked builds this returns false silently and
-  // we relabel the primary button as "Skip for now" to avoid pretending the
-  // connection succeeded.
-  useEffect(() => {
-    if (step === 6) {
-      isAvailable()
-        .then(setHealthAvailable)
-        .catch(() => setHealthAvailable(false));
-    }
-  }, [step]);
 
   useEffect(() => {
     Animated.timing(progressAnim, {
@@ -814,31 +800,6 @@ export default function Onboarding() {
       else next.add(d);
       return next;
     });
-  };
-
-  const handleAppleHealth = async () => {
-    try {
-      const available = await isAvailable();
-      if (!available) {
-        // No HealthKit on this device/build — advance silently without
-        // pretending we connected.
-        handleNext();
-        return;
-      }
-      const granted = await requestPermissions();
-      if (granted && user) {
-        await upsertProfile(user.id, { apple_health_connected: true });
-        toast.show('Apple Health connected', 'success');
-      } else if (!granted) {
-        toast.show(
-          'Apple Health permission denied. You can connect later in Settings.',
-          'info',
-        );
-      }
-    } catch (e) {
-      console.error('Apple Health onboarding error:', e);
-    }
-    handleNext();
   };
 
   return (
@@ -1255,73 +1216,6 @@ export default function Onboarding() {
           )}
 
           {step === 6 && (
-            <View style={{ alignItems: 'center' }}>
-              <Ionicons
-                name="heart-outline"
-                size={64}
-                color={t.danger}
-              />
-              <Text
-                style={[
-                  typo.title1,
-                  {
-                    color: t.text,
-                    marginTop: space.lg,
-                    textAlign: 'center',
-                  },
-                ]}
-              >
-                Connect Apple Health
-              </Text>
-              <Text
-                style={[
-                  typo.subhead,
-                  {
-                    color: t.textSec,
-                    marginTop: space.md,
-                    textAlign: 'center',
-                    paddingHorizontal: space.md,
-                  },
-                ]}
-              >
-                BluCal can read your workouts and weight from Apple Health,
-                and write your nutrition data back.
-              </Text>
-              <Pressable
-                onPress={handleAppleHealth}
-                style={({ pressed }) => ({
-                  marginTop: space.xl,
-                  alignSelf: 'stretch',
-                  height: 52,
-                  borderRadius: radius.lg,
-                  backgroundColor: t.primary,
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  opacity: pressed ? 0.85 : 1,
-                })}
-              >
-                <Text style={[typo.headline, { color: t.textOnPrim }]}>
-                  {healthAvailable ? 'Connect Apple Health' : 'Skip for now'}
-                </Text>
-              </Pressable>
-              {healthAvailable && (
-                <Pressable
-                  onPress={handleNext}
-                  hitSlop={6}
-                  style={({ pressed }) => ({
-                    marginTop: space.lg,
-                    opacity: pressed ? 0.6 : 1,
-                  })}
-                >
-                  <Text style={[typo.subhead, { color: t.textSec }]}>
-                    Skip for now
-                  </Text>
-                </Pressable>
-              )}
-            </View>
-          )}
-
-          {step === 7 && (
             <View style={{ alignItems: 'center' }}>
               <Animated.View
                 style={{

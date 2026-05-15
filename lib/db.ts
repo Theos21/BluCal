@@ -1,5 +1,6 @@
 import { supabase } from './supabase';
-import { writeNutrition, writeWeight } from './appleHealth';
+// HealthKit mirroring disabled until native linking is fixed via Xcode.
+// import { writeNutrition, writeWeight } from './appleHealth';
 import type {
   CustomFood,
   FeelingEntry,
@@ -64,14 +65,14 @@ export const addFoodEntry = async (
     .single();
   if (error) throw error;
 
-  // Mirror to Apple Health in the background — never block on it or throw.
-  writeNutrition({
-    calories: entry.calories,
-    protein_g: Number(entry.protein_g),
-    carbs_g: Number(entry.carbs_g),
-    fat_g: Number(entry.fat_g),
-    logged_at: entry.logged_at,
-  }).catch(console.error);
+  // TODO: Re-enable HealthKit mirroring once native linking is verified.
+  // writeNutrition({
+  //   calories: entry.calories,
+  //   protein_g: Number(entry.protein_g),
+  //   carbs_g: Number(entry.carbs_g),
+  //   fat_g: Number(entry.fat_g),
+  //   logged_at: entry.logged_at,
+  // }).catch(console.error);
 
   return data as FoodEntry;
 };
@@ -200,7 +201,8 @@ export const addWeightEntry = async (
     .single();
   if (error) throw error;
 
-  writeWeight(entry.weight_kg, entry.logged_at).catch(console.error);
+  // TODO: Re-enable HealthKit mirroring once native linking is verified.
+  // writeWeight(entry.weight_kg, entry.logged_at).catch(console.error);
 
   return data as WeightEntry;
 };

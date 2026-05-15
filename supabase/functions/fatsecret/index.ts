@@ -8,64 +8,63 @@ const CLIENT_SECRET = Deno.env.get('FATSECRET_CLIENT_SECRET') ?? '';
 const TOKEN_URL = 'https://oauth.fatsecret.com/connect/token';
 const API_URL = 'https://platform.fatsecret.com/rest/server.api';
 
-// Get OAuth 2.0 access token. Cached in-memory for the worker's lifetime
-// (refreshed one minute before FatSecret's `expires_in`), and the network
-// fetch is bounded to 10s so a hung upstream can't lock up the function.
-let cachedToken: string | null = null;
-let tokenExpiry = 0;
-
-async function getAccessToken(): Promise<string> {
-  const now = Date.now();
-  if (cachedToken && now < tokenExpiry) {
-    console.log('Using cached token');
-    return cachedToken;
-  }
-
-  console.log('Fetching new token...');
-  const credentials = btoa(`${CLIENT_ID}:${CLIENT_SECRET}`);
-
+async function fetchWithTimeout(url: string, options: RequestInit, timeoutMs = 8000): Promise<Response> {
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 10000);
-
+  const id = setTimeout(() => {
+    console.log('Request timed out after', timeoutMs, 'ms');
+    controller.abort();
+  }, timeoutMs);
   try {
-    const res = await fetch(TOKEN_URL, {
-      method: 'POST',
-      headers: {
-        'Authorization': `Basic ${credentials}`,
-        'Content-Type': 'application/x-www-form-urlencoded',
-      },
-      body: 'grant_type=client_credentials&scope=basic',
-      signal: controller.signal,
-    });
-    clearTimeout(timeout);
-    const text = await res.text();
-    console.log('Token status:', res.status, 'response:', text.slice(0, 200));
-    if (!res.ok) throw new Error(`Token error: ${res.status} ${text}`);
-    const data = JSON.parse(text);
-    cachedToken = data.access_token;
-    tokenExpiry = now + (data.expires_in - 60) * 1000;
-    return cachedToken!;
+    const response = await fetch(url, { ...options, signal: controller.signal });
+    clearTimeout(id);
+    return response;
   } catch (e) {
-    clearTimeout(timeout);
-    console.error(
-      'Token fetch error:',
-      e instanceof Error ? e.message : String(e),
-    );
+    clearTimeout(id);
     throw e;
   }
 }
 
-// Call FatSecret API
-async function callFatSecret(token: string, params: Record<string, string>): Promise<any> {
-  const queryString = new URLSearchParams({ ...params, format: 'json' }).toString();
-  const res = await fetch(`${API_URL}?${queryString}`, {
-    headers: { 'Authorization': `Bearer ${token}` },
-  });
-  if (!res.ok) throw new Error(`FatSecret API error: ${res.status}`);
-  return res.json();
+async function getAccessToken(): Promise<string> {
+  console.log('Requesting FatSecret token...');
+  console.log('CLIENT_ID set:', CLIENT_ID.length > 0);
+  console.log('CLIENT_SECRET set:', CLIENT_SECRET.length > 0);
+
+  const credentials = btoa(`${CLIENT_ID}:${CLIENT_SECRET}`);
+  const res = await fetchWithTimeout(TOKEN_URL, {
+    method: 'POST',
+    headers: {
+      'Authorization': `Basic ${credentials}`,
+      'Content-Type': 'application/x-www-form-urlencoded',
+    },
+    body: 'grant_type=client_credentials&scope=basic',
+  }, 8000);
+
+  const text = await res.text();
+  console.log('Token response:', res.status, text.slice(0, 300));
+
+  if (!res.ok) {
+    throw new Error(`FatSecret token failed: ${res.status} ${text}`);
+  }
+
+  const data = JSON.parse(text);
+  return data.access_token;
 }
 
-// Map FatSecret food to our format
+async function callFatSecret(token: string, params: Record<string, string>): Promise<any> {
+  const queryString = new URLSearchParams({ ...params, format: 'json' }).toString();
+  console.log('Calling FatSecret method:', params.method);
+
+  const res = await fetchWithTimeout(`${API_URL}?${queryString}`, {
+    headers: { 'Authorization': `Bearer ${token}` },
+  }, 8000);
+
+  const text = await res.text();
+  console.log('FatSecret response:', res.status, text.slice(0, 500));
+
+  if (!res.ok) throw new Error(`FatSecret API error: ${res.status}`);
+  return JSON.parse(text);
+}
+
 function mapFood(food: any, barcode?: string): any {
   const servings = food.servings?.serving;
   const serving = Array.isArray(servings) ? servings[0] : servings;
@@ -93,8 +92,12 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const { mode, query, barcode } = await req.json();
+    const body = await req.json();
+    const { mode, query, barcode } = body;
+    console.log('Request mode:', mode, 'query:', query, 'barcode:', barcode);
+
     const token = await getAccessToken();
+    console.log('Token obtained successfully');
 
     if (mode === 'search') {
       const data = await callFatSecret(token, {
@@ -107,7 +110,6 @@ Deno.serve(async (req) => {
       const foods = data.foods?.food ?? [];
       const list = Array.isArray(foods) ? foods : [foods];
 
-      // Get full details for each food including serving info
       const results = await Promise.all(
         list.slice(0, 10).map(async (f: any) => {
           try {
@@ -128,7 +130,7 @@ Deno.serve(async (req) => {
     }
 
     if (mode === 'barcode') {
-      const cleanBarcode = barcode.trim().replace(/\D/g, '');
+      const cleanBarcode = (barcode ?? '').trim().replace(/\D/g, '');
       const ean = cleanBarcode.length === 12 ? `0${cleanBarcode}` : cleanBarcode;
       console.log('Barcode lookup:', { original: barcode, clean: cleanBarcode, ean });
 
@@ -138,6 +140,8 @@ Deno.serve(async (req) => {
       });
 
       const foodId = barcodeData.food_id?.value;
+      console.log('Food ID found:', foodId);
+
       if (!foodId) {
         return new Response(JSON.stringify({ result: null }), {
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -155,9 +159,10 @@ Deno.serve(async (req) => {
       });
     }
 
-    throw new Error('Invalid mode. Use search or barcode.');
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
+    throw new Error('Invalid mode. Use search or barcode');
+  } catch (e) {
+    const message = e instanceof Error ? e.message : String(e);
+    console.error('Function error:', message);
     return new Response(JSON.stringify({ error: message }), {
       status: 500,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },

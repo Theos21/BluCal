@@ -157,33 +157,6 @@ function ConfidenceDot({ confidence }: { confidence: Confidence }) {
   );
 }
 
-function MacroCol({
-  value,
-  label,
-  color,
-}: {
-  value: number;
-  label: string;
-  color: string;
-}) {
-  const t = useTheme();
-  return (
-    <View style={{ alignItems: 'center', minWidth: 44 }}>
-      <Text
-        style={[
-          typo.subheadEm,
-          { color, fontVariant: ['tabular-nums'] },
-        ]}
-      >
-        {`${value}g`}
-      </Text>
-      <Text style={[typo.caption2, { color: t.textTer, marginTop: 2 }]}>
-        {label}
-      </Text>
-    </View>
-  );
-}
-
 // ── Main screen ──────────────────────────────────────────────────────────────
 export default function BluAI() {
   const t = useTheme();
@@ -1027,10 +1000,35 @@ export default function BluAI() {
                           >
                             {item.name}
                           </Text>
+                          <View
+                            style={{
+                              flexDirection: 'row',
+                              gap: space.sm,
+                              marginTop: 2,
+                            }}
+                          >
+                            <Text
+                              style={[
+                                typo.caption2,
+                                { color: t.textTer, fontWeight: '600' },
+                              ]}
+                            >
+                              {`${Math.round(item.cal)} cal`}
+                            </Text>
+                            <Text style={[typo.caption2, { color: t.primary }]}>
+                              {`${Math.round(item.p)}g P`}
+                            </Text>
+                            <Text style={[typo.caption2, { color: t.warn }]}>
+                              {`${Math.round(item.c)}g C`}
+                            </Text>
+                            <Text style={[typo.caption2, { color: t.teal }]}>
+                              {`${Math.round(item.f)}g F`}
+                            </Text>
+                          </View>
                           <Text
                             style={[
-                              typo.footnote,
-                              { color: t.textSec, marginTop: 2 },
+                              typo.caption2,
+                              { color: t.textTer, marginTop: 1 },
                             ]}
                             numberOfLines={1}
                           >
@@ -1220,46 +1218,76 @@ export default function BluAI() {
             <View
               style={{
                 flexDirection: 'row',
-                alignItems: 'flex-end',
-                justifyContent: 'space-between',
-                paddingTop: space.md,
-                paddingBottom: space.md,
+                justifyContent: 'space-around',
+                paddingVertical: space.md,
+                backgroundColor: t.surface,
+                borderRadius: radius.lg,
                 borderTopWidth: 0.5,
                 borderTopColor: t.hairline,
+                marginBottom: space.sm,
               }}
             >
-              <View>
+              <View style={{ alignItems: 'center' }}>
                 <Text
                   style={[
-                    typo.caption2,
-                    {
-                      color: t.textTer,
-                      letterSpacing: 0.06,
-                      textTransform: 'uppercase',
-                      fontWeight: '700',
-                    },
-                  ]}
-                >
-                  Total
-                </Text>
-                <Text
-                  style={[
-                    typo.title2,
+                    typo.title3,
                     {
                       color: t.text,
-                      marginTop: 2,
+                      fontWeight: '700',
                       fontVariant: ['tabular-nums'],
                     },
                   ]}
                 >
-                  {totals.cal}
-                  <Text style={[typo.body, { color: t.textSec }]}> kcal</Text>
+                  {Math.round(totals.cal)}
+                </Text>
+                <Text style={[typo.caption2, { color: t.textTer }]}>cal</Text>
+              </View>
+              <View style={{ alignItems: 'center' }}>
+                <Text
+                  style={[
+                    typo.title3,
+                    {
+                      color: t.protein,
+                      fontWeight: '700',
+                      fontVariant: ['tabular-nums'],
+                    },
+                  ]}
+                >
+                  {`${Math.round(totals.p)}g`}
+                </Text>
+                <Text style={[typo.caption2, { color: t.textTer }]}>
+                  protein
                 </Text>
               </View>
-              <View style={{ flexDirection: 'row', gap: 12 }}>
-                <MacroCol value={totals.p} label="protein" color={t.protein} />
-                <MacroCol value={totals.c} label="carbs" color={t.carbs} />
-                <MacroCol value={totals.f} label="fat" color={t.fat} />
+              <View style={{ alignItems: 'center' }}>
+                <Text
+                  style={[
+                    typo.title3,
+                    {
+                      color: t.carbs,
+                      fontWeight: '700',
+                      fontVariant: ['tabular-nums'],
+                    },
+                  ]}
+                >
+                  {`${Math.round(totals.c)}g`}
+                </Text>
+                <Text style={[typo.caption2, { color: t.textTer }]}>carbs</Text>
+              </View>
+              <View style={{ alignItems: 'center' }}>
+                <Text
+                  style={[
+                    typo.title3,
+                    {
+                      color: t.fat,
+                      fontWeight: '700',
+                      fontVariant: ['tabular-nums'],
+                    },
+                  ]}
+                >
+                  {`${Math.round(totals.f)}g`}
+                </Text>
+                <Text style={[typo.caption2, { color: t.textTer }]}>fat</Text>
               </View>
             </View>
 

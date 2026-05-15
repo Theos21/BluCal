@@ -210,19 +210,23 @@ async function enrichItems(rawItems: any[]): Promise<any[]> {
         f: Math.round(Number(item.f ?? 0) * 10) / 10,
       };
       let macros = fallback;
+      let looked: typeof fallback | null = null;
       if (token && Number.isFinite(grams) && grams > 0 && item.name) {
-        const looked = await lookupNutrition(token, String(item.name), grams);
+        looked = await lookupNutrition(token, String(item.name), grams);
         if (looked) macros = looked;
       }
       return {
         id: String(item.id ?? i + 1),
         name: String(item.name ?? 'Unknown'),
         quantity: String(item.quantity ?? ''),
-        cal: macros.cal,
-        p: macros.p,
-        c: macros.c,
-        f: macros.f,
-        confidence: item.confidence ?? 'medium',
+        cal: Math.round(macros.cal),
+        p: Math.round(macros.p * 10) / 10,
+        c: Math.round(macros.c * 10) / 10,
+        f: Math.round(macros.f * 10) / 10,
+        // Downgrade confidence to 'low' when the FatSecret lookup misses, so
+        // the UI can warn the user the macros came from the model's estimate
+        // rather than a database match.
+        confidence: looked ? (item.confidence ?? 'medium') : 'low',
       };
     }),
   );

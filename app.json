@@ -28,11 +28,7 @@
       "infoPlist": {
         "NSCameraUsageDescription": "BluCal uses your camera to scan food barcodes and analyze meals with BluAI.",
         "NSPhotoLibraryUsageDescription": "BluCal accesses your photos so you can upload a meal photo to BluAI.",
-        "NSMicrophoneUsageDescription": "BluCal uses your microphone to let you log food by voice.",
-        "NSSpeechRecognitionUsageDescription": "BluCal uses speech recognition to convert your voice into food searches.",
-        "NSHealthShareUsageDescription": "BluCal reads your weight and workout data to improve your macro targets.",
-        "NSHealthUpdateUsageDescription": "BluCal writes your nutrition data to Apple Health.",
-        "ITSAppUsesNonExemptEncryption": false
+        "NSMicrophoneUsageDescription": "BluCal uses your microphone for voice food logging."
       }
     },
     "android": {
@@ -52,7 +48,13 @@
     "plugins": [
       "expo-router",
       "expo-apple-authentication",
-      "@kingstinct/react-native-healthkit",
+      [
+        "@kingstinct/react-native-healthkit",
+        {
+          "NSHealthShareUsageDescription": "BluCal reads your weight and workout data to improve your macro targets.",
+          "NSHealthUpdateUsageDescription": "BluCal writes your nutrition data to Apple Health."
+        }
+      ],
       [
         "expo-notifications",
         {

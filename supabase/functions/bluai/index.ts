@@ -247,6 +247,8 @@ Deno.serve(async (req) => {
     const {
       base64Image,
       mimeType,
+      imageData,
+      imageMediaType,
       userNotes,
       hasDepth,
       mode,
@@ -281,6 +283,62 @@ Deno.serve(async (req) => {
         }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
       );
+    }
+
+    // ── Nutrition label mode (read a printed Nutrition Facts panel) ─────────
+    if (mode === 'nutrition_label') {
+      const response = await client.messages.create({
+        model: MODEL,
+        max_tokens: 1024,
+        messages: [
+          {
+            role: 'user',
+            content: [
+              {
+                type: 'image',
+                source: {
+                  type: 'base64',
+                  media_type: imageMediaType,
+                  data: imageData,
+                },
+              },
+              {
+                type: 'text',
+                text: `This is a nutrition facts label. Extract the nutrition information exactly as shown on the label.
+
+Return ONLY valid JSON with no other text:
+{
+  "name": "product name if visible, otherwise 'Scanned Food'",
+  "serving_description": "serving size description from label (e.g. '1 cup (240ml)')",
+  "serving_size_g": 240,
+  "calories": 150,
+  "protein_g": 8,
+  "carbs_g": 22,
+  "fat_g": 3,
+  "fiber_g": 2,
+  "sugar_g": 10,
+  "sodium_mg": 140,
+  "saturated_fat_g": 1,
+  "cholesterol_mg": 5
+}
+
+Rules:
+- Use EXACTLY the values shown on the label, do not estimate
+- serving_size_g should be the gram equivalent of the serving size
+- If a value shows < 1g use 0
+- All numeric values must be numbers not strings`,
+              },
+            ],
+          },
+        ],
+      });
+
+      const text =
+        response.content[0].type === 'text' ? response.content[0].text : '';
+      const result = JSON.parse(text.replace(/```json|```/g, '').trim());
+      return new Response(JSON.stringify({ label: result }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
     }
 
     // ── Refine mode (unchanged Claude-only flow) ────────────────────────────

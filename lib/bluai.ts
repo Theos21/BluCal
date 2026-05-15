@@ -122,3 +122,41 @@ export const analyzeTextDescription = async (
 ): Promise<BluAIResult> => {
   return invokeBluAI({ description, mode: 'text' });
 };
+
+export interface NutritionLabelResult {
+  name: string;
+  serving_description: string;
+  serving_size_g: number;
+  calories: number;
+  protein_g: number;
+  carbs_g: number;
+  fat_g: number;
+  fiber_g: number;
+  sugar_g: number;
+  sodium_mg: number;
+  saturated_fat_g: number;
+  cholesterol_mg: number;
+}
+
+export const scanNutritionLabel = async (
+  base64: string,
+  mimeType: string,
+): Promise<NutritionLabelResult> => {
+  const { data, error } = await supabase.functions.invoke('bluai', {
+    body: {
+      mode: 'nutrition_label',
+      imageData: base64,
+      imageMediaType: mimeType,
+    },
+  });
+  if (error) {
+    throw new BluAIException(
+      'network_error',
+      'Could not read nutrition label.',
+    );
+  }
+  if (!data?.label) {
+    throw new BluAIException('invalid_response', 'Could not read label data.');
+  }
+  return data.label as NutritionLabelResult;
+};

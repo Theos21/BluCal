@@ -27,6 +27,7 @@ import { useToast } from '../lib/useToast';
 import { useAuth } from '../lib/AuthContext';
 import { addFoodEntry } from '../lib/db';
 import { lookupBarcode, type FoodSearchResult } from '../lib/foodSearch';
+import { scanNutritionLabel, type NutritionLabelResult } from '../lib/bluai';
 import { sessionState } from '../lib/sessionState';
 
 const FRAME_W = 260;
@@ -39,6 +40,8 @@ const CONTROL_SIZE = 40;
 // are independent of the app theme — no theme tokens exist for them.
 const OVERLAY_COLOR = 'rgba(0,0,0,0.6)';
 const CONTROL_BG = 'rgba(0,0,0,0.5)';
+const TIP_BG = 'rgba(0,0,0,0.75)';
+const TIP_SUBTEXT_COLOR = 'rgba(255,255,255,0.7)';
 
 const formatFoodName = (name: string): string => {
   if (!name) return '';
@@ -204,11 +207,13 @@ function FoundSheetContent({
   product,
   onAdd,
   onWrongProduct,
+  onScanLabel,
   saving,
 }: {
   product: FoodSearchResult;
   onAdd: (payload: AddPayload) => void;
   onWrongProduct: () => void;
+  onScanLabel: () => void;
   saving: boolean;
 }) {
   const t = useTheme();
@@ -326,6 +331,24 @@ function FoundSheetContent({
           )}
         </View>
       </View>
+
+      {/* Wrong item? Read the printed label instead. */}
+      <Pressable
+        onPress={onScanLabel}
+        style={({ pressed }) => ({
+          alignItems: 'center',
+          paddingVertical: space.sm,
+          marginTop: space.sm,
+          opacity: pressed ? 0.6 : 1,
+        })}
+      >
+        <Text style={[typo.caption1, { color: t.textSec }]}>
+          Wrong item?{' '}
+          <Text style={{ color: t.primary, fontWeight: '600' }}>
+            Scan nutrition label instead
+          </Text>
+        </Text>
+      </Pressable>
 
       {/* Serving picker — only when multiple options */}
       {product.all_servings.length > 1 && (
@@ -558,9 +581,13 @@ function FoundSheetContent({
 function NotFoundSheetContent({
   barcode,
   onRetry,
+  onScanLabel,
+  scanningLabel,
 }: {
   barcode: string;
   onRetry: () => void;
+  onScanLabel: () => void;
+  scanningLabel: boolean;
 }) {
   const t = useTheme();
   return (
@@ -572,10 +599,47 @@ function NotFoundSheetContent({
       <Text style={[typo.caption1, { color: t.textTer, marginTop: 2 }]}>
         {barcode}
       </Text>
+
+      <Pressable
+        onPress={onScanLabel}
+        disabled={scanningLabel}
+        style={({ pressed }) => ({
+          backgroundColor: t.surface2,
+          borderRadius: radius.lg,
+          padding: space.md,
+          alignItems: 'center',
+          marginTop: space.lg,
+          opacity: pressed ? 0.7 : 1,
+        })}
+      >
+        {scanningLabel ? (
+          <ActivityIndicator color={t.primary} />
+        ) : (
+          <>
+            <Ionicons
+              name="document-text-outline"
+              size={24}
+              color={t.primary}
+            />
+            <Text
+              style={[
+                typo.subhead,
+                { color: t.primary, fontWeight: '600', marginTop: space.xs },
+              ]}
+            >
+              Scan nutrition label
+            </Text>
+            <Text style={[typo.caption1, { color: t.textSec, marginTop: 2 }]}>
+              Point camera at the nutrition facts panel
+            </Text>
+          </>
+        )}
+      </Pressable>
+
       <Pressable
         onPress={() => router.replace('/custom-food')}
         style={({ pressed }) => ({
-          marginTop: space.xl,
+          marginTop: space.md,
           height: 48,
           borderRadius: radius.lg,
           backgroundColor: t.surface2,
@@ -619,9 +683,39 @@ export default function BarcodeScanner() {
   const [lastBarcode, setLastBarcode] = useState<string>('');
   const [lookingUp, setLookingUp] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [scanningLabel, setScanningLabel] = useState(false);
+  const [labelResult, setLabelResult] = useState<NutritionLabelResult | null>(
+    null,
+  );
+
+  const cameraRef = useRef<CameraView>(null);
+
+  // A scanned nutrition label is surfaced through the same found sheet as a
+  // barcode hit, so adapt it to the FoodSearchResult shape that sheet expects.
+  const labelAsFood: FoodSearchResult | null = labelResult
+    ? {
+        id: 'label-scan',
+        name: labelResult.name,
+        brand: null,
+        calories: labelResult.calories,
+        protein_g: labelResult.protein_g,
+        carbs_g: labelResult.carbs_g,
+        fat_g: labelResult.fat_g,
+        fiber_g: labelResult.fiber_g,
+        sugar_g: labelResult.sugar_g,
+        sodium_mg: labelResult.sodium_mg,
+        serving_size: labelResult.serving_size_g,
+        serving_unit: 'g',
+        serving_description: labelResult.serving_description,
+        all_servings: [],
+        image_url: null,
+        barcode: null,
+      }
+    : null;
 
   const sheetY = useRef(new Animated.Value(screenH)).current;
-  const sheetVisible = scannedProduct !== null || notFound;
+  const sheetVisible =
+    scannedProduct !== null || labelResult !== null || notFound;
 
   useEffect(() => {
     if (permission && !permission.granted && permission.canAskAgain) {
@@ -676,25 +770,52 @@ export default function BarcodeScanner() {
   const handleRetry = () => {
     setNotFound(false);
     setScannedProduct(null);
+    setLabelResult(null);
     setLookingUp(false);
     setLastBarcode('');
   };
 
   const handleWrongProduct = () => {
     setScannedProduct(null);
+    setLabelResult(null);
     setNotFound(false);
     setLookingUp(false);
   };
 
+  const handleScanNutritionLabel = async () => {
+    if (scanningLabel) return;
+    setScanningLabel(true);
+    try {
+      const photo = await cameraRef.current?.takePictureAsync({
+        base64: true,
+        quality: 0.9,
+      });
+      if (!photo?.base64) throw new Error('No image');
+      toast.show('Reading nutrition label…', 'info');
+      const result = await scanNutritionLabel(photo.base64, 'image/jpeg');
+      setLabelResult(result);
+      setNotFound(false);
+    } catch {
+      toast.show(
+        'Could not read label. Try again with better lighting.',
+        'error',
+      );
+    } finally {
+      setScanningLabel(false);
+    }
+  };
+
   const handleAddToLog = async (payload: AddPayload) => {
-    if (!user || !scannedProduct || saving) return;
+    const product = scannedProduct ?? labelAsFood;
+    if (!user || !product || saving) return;
+    const isLabelScan = scannedProduct === null;
     setSaving(true);
     try {
       const { unit, qty, portionDescription, scaled } = payload;
       await addFoodEntry({
         user_id: user.id,
         logged_at: new Date().toISOString(),
-        name: scannedProduct.name,
+        name: product.name,
         portion_description: portionDescription,
         quantity: qty,
         unit,
@@ -707,12 +828,12 @@ export default function BarcodeScanner() {
         sodium_mg: scaled.sodium,
         saturated_fat_g: 0,
         cholesterol_mg: 0,
-        food_database_id: scannedProduct.id,
-        barcode: scannedProduct.barcode,
-        source: 'barcode',
+        food_database_id: isLabelScan ? null : product.id,
+        barcode: product.barcode,
+        source: isLabelScan ? 'bluai' : 'barcode',
       });
-      sessionState.setJustLoggedFood(scannedProduct.name);
-      toast.show(`Added: ${scannedProduct.name}`, 'success');
+      sessionState.setJustLoggedFood(product.name);
+      toast.show(`Added: ${product.name}`, 'success');
       setTimeout(() => router.back(), 1200);
     } catch {
       toast.show('Could not add food. Try again.', 'error');
@@ -782,6 +903,7 @@ export default function BarcodeScanner() {
   return (
     <View style={{ flex: 1 }}>
       <CameraView
+        ref={cameraRef}
         style={{ flex: 1 }}
         facing="back"
         enableTorch={torchOn}
@@ -949,6 +1071,34 @@ export default function BarcodeScanner() {
         </View>
       )}
 
+      {/* nutrition-label scan tip */}
+      {scanningLabel && (
+        <View
+          pointerEvents="none"
+          style={{
+            position: 'absolute',
+            bottom: 160,
+            left: 20,
+            right: 20,
+            backgroundColor: TIP_BG,
+            borderRadius: 14,
+            padding: 14,
+            alignItems: 'center',
+          }}
+        >
+          <Text
+            style={[typo.subhead, { color: t.textOnPrim, fontWeight: '600' }]}
+          >
+            Point at the Nutrition Facts panel
+          </Text>
+          <Text
+            style={[typo.caption1, { color: TIP_SUBTEXT_COLOR, marginTop: 4 }]}
+          >
+            Make sure the entire label is visible and well lit
+          </Text>
+        </View>
+      )}
+
       {/* bottom sheet */}
       <Animated.View
         pointerEvents={sheetVisible ? 'auto' : 'none'}
@@ -978,11 +1128,26 @@ export default function BarcodeScanner() {
                 product={scannedProduct}
                 onAdd={handleAddToLog}
                 onWrongProduct={handleWrongProduct}
+                onScanLabel={handleScanNutritionLabel}
                 saving={saving}
               />
             )}
-            {!scannedProduct && notFound && (
-              <NotFoundSheetContent barcode={lastBarcode} onRetry={handleRetry} />
+            {!scannedProduct && labelAsFood && (
+              <FoundSheetContent
+                product={labelAsFood}
+                onAdd={handleAddToLog}
+                onWrongProduct={handleWrongProduct}
+                onScanLabel={handleScanNutritionLabel}
+                saving={saving}
+              />
+            )}
+            {!scannedProduct && !labelAsFood && notFound && (
+              <NotFoundSheetContent
+                barcode={lastBarcode}
+                onRetry={handleRetry}
+                onScanLabel={handleScanNutritionLabel}
+                scanningLabel={scanningLabel}
+              />
             )}
           </ScrollView>
         </KeyboardAvoidingView>

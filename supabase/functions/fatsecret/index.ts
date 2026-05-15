@@ -8,20 +8,51 @@ const CLIENT_SECRET = Deno.env.get('FATSECRET_CLIENT_SECRET') ?? '';
 const TOKEN_URL = 'https://oauth.fatsecret.com/connect/token';
 const API_URL = 'https://platform.fatsecret.com/rest/server.api';
 
-// Get OAuth 2.0 access token
+// Get OAuth 2.0 access token. Cached in-memory for the worker's lifetime
+// (refreshed one minute before FatSecret's `expires_in`), and the network
+// fetch is bounded to 10s so a hung upstream can't lock up the function.
+let cachedToken: string | null = null;
+let tokenExpiry = 0;
+
 async function getAccessToken(): Promise<string> {
+  const now = Date.now();
+  if (cachedToken && now < tokenExpiry) {
+    console.log('Using cached token');
+    return cachedToken;
+  }
+
+  console.log('Fetching new token...');
   const credentials = btoa(`${CLIENT_ID}:${CLIENT_SECRET}`);
-  const res = await fetch(TOKEN_URL, {
-    method: 'POST',
-    headers: {
-      'Authorization': `Basic ${credentials}`,
-      'Content-Type': 'application/x-www-form-urlencoded',
-    },
-    body: 'grant_type=client_credentials&scope=basic',
-  });
-  if (!res.ok) throw new Error(`Token error: ${res.status}`);
-  const data = await res.json();
-  return data.access_token;
+
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 10000);
+
+  try {
+    const res = await fetch(TOKEN_URL, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Basic ${credentials}`,
+        'Content-Type': 'application/x-www-form-urlencoded',
+      },
+      body: 'grant_type=client_credentials&scope=basic',
+      signal: controller.signal,
+    });
+    clearTimeout(timeout);
+    const text = await res.text();
+    console.log('Token status:', res.status, 'response:', text.slice(0, 200));
+    if (!res.ok) throw new Error(`Token error: ${res.status} ${text}`);
+    const data = JSON.parse(text);
+    cachedToken = data.access_token;
+    tokenExpiry = now + (data.expires_in - 60) * 1000;
+    return cachedToken!;
+  } catch (e) {
+    clearTimeout(timeout);
+    console.error(
+      'Token fetch error:',
+      e instanceof Error ? e.message : String(e),
+    );
+    throw e;
+  }
 }
 
 // Call FatSecret API

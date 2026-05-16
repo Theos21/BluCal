@@ -60,21 +60,21 @@ class ErrorBoundary extends React.Component<
 function RootNavigator() {
   const t = useTheme();
   const router = useRouter();
-  const { session, profile, loading, refreshProfile } = useAuth();
+  const { session, profile, isReady, refreshProfile } = useAuth();
 
   useEffect(() => {
-    if (loading) return;
+    if (!isReady) return;
     if (!session) {
       router.replace('/(auth)/welcome');
       return;
     }
-    if (profile === undefined) return; // still loading profile
+    if (profile === undefined) return; // profile still loading in the background
     if (profile === null || !profile.goal) {
       router.replace('/(auth)/onboarding');
       return;
     }
     router.replace('/(tabs)');
-  }, [session, profile, loading, router]);
+  }, [session, profile, isReady, router]);
 
   // Deep-link handler for OAuth callbacks and password-recovery links. The
   // primary OAuth success path is handled inline by signInWithGoogle via
@@ -112,19 +112,20 @@ function RootNavigator() {
     return () => sub.remove();
   }, [router, refreshProfile]);
 
-  if (loading || (session && profile === undefined)) {
-    // theme context may not be ready on cold boot, so the spinner uses
-    // hardcoded brand colors instead of useTheme().
+  if (!isReady || (session && profile === undefined)) {
+    // Cold-boot loading state. The theme context may not be ready yet, so it
+    // uses the hardcoded dark app background — matching app.json's splash
+    // backgroundColor — so the splash -> app handoff has no white flash.
     return (
       <View
         style={{
           flex: 1,
           justifyContent: 'center',
           alignItems: 'center',
-          backgroundColor: '#F4F4F6',
+          backgroundColor: '#18191D',
         }}
       >
-        <ActivityIndicator size="large" color="#185FA5" />
+        <ActivityIndicator size="large" color="#4F95DC" />
       </View>
     );
   }

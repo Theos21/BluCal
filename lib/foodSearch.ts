@@ -22,6 +22,8 @@ export interface FoodSearchResult {
   fiber_g: number;
   sugar_g: number;
   sodium_mg: number;
+  saturated_fat_g: number;
+  cholesterol_mg: number;
   serving_size: number;
   serving_unit: string;
   serving_description: string;

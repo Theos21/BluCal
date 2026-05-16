@@ -105,6 +105,8 @@ function mapFood(food: any, barcode?: string): any {
     fiber_g: Math.round(Number(serving?.fiber ?? 0) * 10) / 10,
     sugar_g: Math.round(Number(serving?.sugar ?? 0) * 10) / 10,
     sodium_mg: Math.round(Number(serving?.sodium ?? 0)),
+    saturated_fat_g: Math.round(Number(serving?.saturated_fat ?? 0) * 10) / 10,
+    cholesterol_mg: Math.round(Number(serving?.cholesterol ?? 0)),
     serving_size: Number(serving?.metric_serving_amount ?? 100),
     serving_unit: serving?.metric_serving_unit ?? 'g',
     serving_description: serving?.serving_description ?? '1 serving',

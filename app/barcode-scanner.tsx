@@ -111,6 +111,8 @@ type AddPayload = {
     fiber: number;
     sugar: number;
     sodium: number;
+    saturatedFat: number;
+    cholesterol: number;
   };
 };
 
@@ -241,6 +243,8 @@ function FoundSheetContent({
         fiber: Math.round(product.fiber_g * qty * 10) / 10,
         sugar: Math.round(product.sugar_g * qty * 10) / 10,
         sodium: Math.round(product.sodium_mg * qty),
+        saturatedFat: Math.round(product.saturated_fat_g * qty * 10) / 10,
+        cholesterol: Math.round(product.cholesterol_mg * qty),
       };
     }
     const grams = unit === 'oz' ? qty * 28.3495 : qty;
@@ -253,6 +257,8 @@ function FoundSheetContent({
       fiber: Math.round(product.fiber_g * factor * 10) / 10,
       sugar: Math.round(product.sugar_g * factor * 10) / 10,
       sodium: Math.round(product.sodium_mg * factor),
+      saturatedFat: Math.round(product.saturated_fat_g * factor * 10) / 10,
+      cholesterol: Math.round(product.cholesterol_mg * factor),
     };
   };
 
@@ -825,8 +831,8 @@ export default function BarcodeScanner() {
         fiber_g: scaled.fiber,
         sugar_g: scaled.sugar,
         sodium_mg: scaled.sodium,
-        saturated_fat_g: 0,
-        cholesterol_mg: 0,
+        saturated_fat_g: scaled.saturatedFat,
+        cholesterol_mg: scaled.cholesterol,
         food_database_id: scannedProduct.id,
         barcode: scannedProduct.barcode,
         source: 'barcode',

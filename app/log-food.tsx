@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
+  Alert,
   Animated,
   Modal,
   Pressable,
@@ -18,12 +19,17 @@ import {
 } from 'expo-speech-recognition';
 import { radius, space, type as typo, useTheme, type Theme } from '../lib/theme';
 import Toast from '../components/Toast';
+import FoodDetailSheet from '../components/FoodDetailSheet';
 import { useToast } from '../lib/useToast';
 import { useAuth } from '../lib/AuthContext';
 import {
   addFoodEntry,
+  deleteCustomFood,
+  deleteRecipe,
   getCommunityFoods,
+  getCurrentMacroTarget,
   getCustomFoods,
+  getFoodEntriesForDate,
   getRecentFoods,
   getRecipesWithMacros,
   type RecipeWithMacros,
@@ -34,7 +40,7 @@ import {
   type FoodSearchResult,
 } from '../lib/foodSearch';
 import { sessionState } from '../lib/sessionState';
-import type { CustomFood, FoodEntry } from '../lib/types';
+import type { CustomFood, FoodEntry, MacroTarget } from '../lib/types';
 
 type RichRow = {
   id: string;
@@ -46,7 +52,12 @@ type RichRow = {
   protein_g: number;
   carbs_g: number;
   fat_g: number;
+  // Tapping the row body opens the food detail sheet.
+  onPress: () => void;
+  // Tapping the trailing + button logs the food immediately.
   onAdd: () => void;
+  // When set, a trailing trash button removes the item.
+  onDelete?: () => void;
 };
 
 const formatFoodName = (name: string): string => {
@@ -310,7 +321,7 @@ function RichFoodRowItem({
   return (
     <View>
       <Pressable
-        onPress={row.onAdd}
+        onPress={row.onPress}
         style={({ pressed }) => ({
           flexDirection: 'row',
           alignItems: 'center',
@@ -446,8 +457,28 @@ function RichFoodRowItem({
           </View>
         </View>
 
-        <View
-          style={{
+        {row.onDelete && (
+          <Pressable
+            onPress={row.onDelete}
+            hitSlop={8}
+            style={({ pressed }) => ({
+              width: 34,
+              height: 34,
+              borderRadius: 17,
+              backgroundColor: t.dangerSoft,
+              alignItems: 'center',
+              justifyContent: 'center',
+              flexShrink: 0,
+              opacity: pressed ? 0.6 : 1,
+            })}
+          >
+            <Ionicons name="trash-outline" size={18} color={t.danger} />
+          </Pressable>
+        )}
+        <Pressable
+          onPress={row.onAdd}
+          hitSlop={8}
+          style={({ pressed }) => ({
             width: 34,
             height: 34,
             borderRadius: 17,
@@ -455,10 +486,11 @@ function RichFoodRowItem({
             alignItems: 'center',
             justifyContent: 'center',
             flexShrink: 0,
-          }}
+            opacity: pressed ? 0.7 : 1,
+          })}
         >
           <Ionicons name="add" size={22} color={t.textOnPrim} />
-        </View>
+        </Pressable>
       </Pressable>
       {showDivider && (
         <View style={{ height: 0.5, backgroundColor: t.hairline }} />
@@ -547,10 +579,12 @@ function MyFoodsEmptyState() {
 
 function CommunityFoodsSection({
   foods,
-  onSelect,
+  onOpenDetail,
+  onLog,
 }: {
   foods: CustomFood[];
-  onSelect: (food: CustomFood) => void;
+  onOpenDetail: (food: CustomFood) => void;
+  onLog: (food: CustomFood) => void;
 }) {
   const t = useTheme();
   return (
@@ -582,7 +616,7 @@ function CommunityFoodsSection({
       {foods.map((food) => (
         <Pressable
           key={food.id}
-          onPress={() => onSelect(food)}
+          onPress={() => onOpenDetail(food)}
           style={({ pressed }) => ({
             flexDirection: 'row',
             alignItems: 'center',
@@ -652,18 +686,21 @@ function CommunityFoodsSection({
               </Text>
             </View>
           </View>
-          <View
-            style={{
+          <Pressable
+            onPress={() => onLog(food)}
+            hitSlop={8}
+            style={({ pressed }) => ({
               width: 34,
               height: 34,
               borderRadius: 17,
               backgroundColor: t.teal,
               alignItems: 'center',
               justifyContent: 'center',
-            }}
+              opacity: pressed ? 0.7 : 1,
+            })}
           >
             <Ionicons name="add" size={22} color={t.textOnPrim} />
-          </View>
+          </Pressable>
         </Pressable>
       ))}
     </View>
@@ -672,10 +709,12 @@ function CommunityFoodsSection({
 
 function SearchResultsList({
   results,
-  onSelect,
+  onOpenDetail,
+  onLog,
 }: {
   results: FoodSearchResult[];
-  onSelect: (r: FoodSearchResult) => void;
+  onOpenDetail: (r: FoodSearchResult) => void;
+  onLog: (r: FoodSearchResult) => void;
 }) {
   const rows: RichRow[] = results.map((r) => ({
     id: r.id,
@@ -685,7 +724,8 @@ function SearchResultsList({
     protein_g: r.protein_g,
     carbs_g: r.carbs_g,
     fat_g: r.fat_g,
-    onAdd: () => onSelect(r),
+    onPress: () => onOpenDetail(r),
+    onAdd: () => onLog(r),
   }));
   return (
     <View style={{ paddingHorizontal: space.lg, marginTop: space.xl }}>
@@ -743,6 +783,12 @@ export default function LogFood() {
   const [myRecipes, setMyRecipes] = useState<RecipeWithMacros[]>([]);
   const [myFoods, setMyFoods] = useState<CustomFood[]>([]);
   const [communityFoods, setCommunityFoods] = useState<CustomFood[]>([]);
+  const [todayEntries, setTodayEntries] = useState<FoodEntry[]>([]);
+  const [macroTarget, setMacroTarget] = useState<MacroTarget | null>(null);
+  const [detail, setDetail] = useState<{
+    food: FoodSearchResult | CustomFood;
+    onLog: () => void;
+  } | null>(null);
   const [loading, setLoading] = useState(true);
   const [loggingRecipe, setLoggingRecipe] = useState<RecipeWithMacros | null>(
     null,
@@ -820,11 +866,15 @@ export default function LogFood() {
       getRecentFoods(user.id),
       getRecipesWithMacros(user.id),
       getCustomFoods(user.id),
+      getFoodEntriesForDate(user.id, new Date()),
+      getCurrentMacroTarget(user.id),
     ])
-      .then(([recent, recipes, custom]) => {
+      .then(([recent, recipes, custom, today, target]) => {
         setRecentFoods(recent);
         setMyRecipes(recipes);
         setMyFoods(custom);
+        setTodayEntries(today);
+        setMacroTarget(target);
       })
       .catch(console.error)
       .finally(() => setLoading(false));
@@ -967,6 +1017,90 @@ export default function LogFood() {
     }
   };
 
+  // A recent entry is a logged FoodEntry. Reshape it as a CustomFood so the
+  // detail sheet (which accepts FoodSearchResult | CustomFood) can show it.
+  const entryToDetailFood = (entry: FoodEntry): CustomFood => ({
+    id: entry.id,
+    user_id: entry.user_id,
+    name: entry.name,
+    brand: null,
+    barcode: entry.barcode,
+    serving_size: entry.quantity,
+    serving_unit: entry.unit,
+    calories: entry.calories,
+    protein_g: Number(entry.protein_g),
+    carbs_g: Number(entry.carbs_g),
+    fat_g: Number(entry.fat_g),
+    fiber_g: entry.fiber_g,
+    sugar_g: entry.sugar_g,
+    sodium_mg: entry.sodium_mg,
+    saturated_fat_g: entry.saturated_fat_g,
+    cholesterol_mg: entry.cholesterol_mg,
+    is_public: false,
+    created_at: entry.created_at,
+  });
+
+  const openFoodDetail = (food: FoodSearchResult) => {
+    setDetail({ food, onLog: () => void handleSelectFood(food) });
+  };
+
+  const openCustomFoodDetail = (food: CustomFood) => {
+    setDetail({ food, onLog: () => void handleSelectCustomFood(food) });
+  };
+
+  const openRecentDetail = (entry: FoodEntry) => {
+    setDetail({
+      food: entryToDetailFood(entry),
+      onLog: () => void handleReLog(entry),
+    });
+  };
+
+  const handleDeleteCustomFood = (food: CustomFood) => {
+    Alert.alert(
+      'Delete custom food?',
+      `Remove "${food.name}" from your custom foods? This cannot be undone.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await deleteCustomFood(food.id);
+              setMyFoods((prev) => prev.filter((f) => f.id !== food.id));
+              toast.show('Custom food deleted.', 'success');
+            } catch {
+              toast.show('Could not delete. Try again.', 'error');
+            }
+          },
+        },
+      ],
+    );
+  };
+
+  const handleDeleteRecipe = (recipe: RecipeWithMacros) => {
+    Alert.alert(
+      'Delete recipe?',
+      `Remove "${recipe.name}"? This cannot be undone.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await deleteRecipe(recipe.id);
+              setMyRecipes((prev) => prev.filter((r) => r.id !== recipe.id));
+              toast.show('Recipe deleted.', 'success');
+            } catch {
+              toast.show('Could not delete. Try again.', 'error');
+            }
+          },
+        },
+      ],
+    );
+  };
+
   const recentRows: RichRow[] = recentFoods.map((entry) => ({
     id: entry.id,
     name: entry.name,
@@ -974,6 +1108,7 @@ export default function LogFood() {
     protein_g: Number(entry.protein_g),
     carbs_g: Number(entry.carbs_g),
     fat_g: Number(entry.fat_g),
+    onPress: () => openRecentDetail(entry),
     onAdd: () => void handleReLog(entry),
   }));
 
@@ -1028,7 +1163,9 @@ export default function LogFood() {
     protein_g: Number(recipe.perServing.protein_g),
     carbs_g: Number(recipe.perServing.carbs_g),
     fat_g: Number(recipe.perServing.fat_g),
+    onPress: () => handleLogRecipe(recipe),
     onAdd: () => handleLogRecipe(recipe),
+    onDelete: () => handleDeleteRecipe(recipe),
   }));
 
   const myFoodRows: RichRow[] = myFoods.map((food) => ({
@@ -1040,10 +1177,29 @@ export default function LogFood() {
     protein_g: Number(food.protein_g),
     carbs_g: Number(food.carbs_g),
     fat_g: Number(food.fat_g),
+    onPress: () => openCustomFoodDetail(food),
     onAdd: () => void handleSelectCustomFood(food),
+    onDelete: () => handleDeleteCustomFood(food),
   }));
 
   const isSearching = searchQuery.trim().length > 0;
+
+  // Today's running totals and targets, fed to the detail sheet so its
+  // preview rings show how a food would move each macro.
+  const currentMacros = {
+    cal: Math.round(todayEntries.reduce((s, e) => s + e.calories, 0)),
+    protein: Math.round(
+      todayEntries.reduce((s, e) => s + Number(e.protein_g), 0),
+    ),
+    carbs: Math.round(todayEntries.reduce((s, e) => s + Number(e.carbs_g), 0)),
+    fat: Math.round(todayEntries.reduce((s, e) => s + Number(e.fat_g), 0)),
+  };
+  const targets = {
+    cal: macroTarget?.calories ?? 2000,
+    protein: macroTarget?.protein_g ?? 160,
+    carbs: macroTarget?.carbs_g ?? 220,
+    fat: macroTarget?.fat_g ?? 65,
+  };
 
   return (
     <SafeAreaView
@@ -1132,13 +1288,15 @@ export default function LogFood() {
             ) : (
               <SearchResultsList
                 results={searchResults}
-                onSelect={handleSelectFood}
+                onOpenDetail={openFoodDetail}
+                onLog={handleSelectFood}
               />
             )}
             {!searching && communityFoods.length > 0 && (
               <CommunityFoodsSection
                 foods={communityFoods}
-                onSelect={handleSelectCustomFood}
+                onOpenDetail={openCustomFoodDetail}
+                onLog={handleSelectCustomFood}
               />
             )}
           </>
@@ -1427,6 +1585,18 @@ export default function LogFood() {
           </Pressable>
         </View>
       </Modal>
+
+      <FoodDetailSheet
+        food={detail?.food ?? null}
+        currentMacros={currentMacros}
+        targets={targets}
+        onDismiss={() => setDetail(null)}
+        onLog={() => {
+          const current = detail;
+          setDetail(null);
+          current?.onLog();
+        }}
+      />
 
       <Toast
         message={toast.message}

@@ -271,18 +271,6 @@ export default function MacroSummaryCard({
           onToggle={toggle}
         />
       </View>
-      <Text
-        style={[
-          typo.caption2,
-          {
-            color: t.textTer,
-            textAlign: 'center',
-            marginTop: space.xs,
-          },
-        ]}
-      >
-        Tap rings to toggle consumed / remaining
-      </Text>
     </View>
   );
 }

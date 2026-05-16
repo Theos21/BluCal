@@ -583,6 +583,11 @@ export const addCustomFood = async (
   return data as CustomFood;
 };
 
+export const deleteCustomFood = async (id: string): Promise<void> => {
+  const { error } = await supabase.from('custom_foods').delete().eq('id', id);
+  if (error) throw error;
+};
+
 // ── Recipes ──────────────────────────────────────────────────────────────────
 export const getRecipes = async (userId: string): Promise<Recipe[]> => {
   const { data, error } = await supabase

@@ -7,6 +7,12 @@ import * as Linking from 'expo-linking';
 import { useTheme } from '../lib/theme';
 import { AuthProvider, useAuth } from '../lib/AuthContext';
 import { supabase } from '../lib/supabase';
+import * as SplashScreen from 'expo-splash-screen';
+
+// Hold the native splash on screen until RootNavigator has resolved the
+// cached auth state and is ready to render the real destination. This must
+// run at module scope, before the splash would otherwise auto-hide.
+SplashScreen.preventAutoHideAsync().catch(() => {});
 
 class ErrorBoundary extends React.Component<
   { children: React.ReactNode },
@@ -23,6 +29,9 @@ class ErrorBoundary extends React.Component<
 
   componentDidCatch(error: Error, info: React.ErrorInfo) {
     console.error('RootLayout ErrorBoundary caught:', error, info);
+    // A crash before RootNavigator resolves would otherwise leave the native
+    // splash stuck on top of this error screen.
+    SplashScreen.hideAsync().catch(() => {});
   }
 
   render() {
@@ -75,6 +84,17 @@ function RootNavigator() {
     }
     router.replace('/(tabs)');
   }, [session, profile, isReady, router]);
+
+  // Hand the native splash off directly to the app once it can render its
+  // real destination screen. A returning user with a cached session keeps the
+  // splash up until the background profile fetch resolves, so they go straight
+  // from splash to app with no white screen and no spinner. Logged-out users
+  // hand off as soon as the cached session check resolves.
+  useEffect(() => {
+    if (isReady && (!session || profile !== undefined)) {
+      SplashScreen.hideAsync().catch(() => {});
+    }
+  }, [isReady, session, profile]);
 
   // Deep-link handler for OAuth callbacks and password-recovery links. The
   // primary OAuth success path is handled inline by signInWithGoogle via

@@ -22,15 +22,16 @@ import { router, useFocusEffect } from 'expo-router';
 import { radius, space, type as typo, useTheme } from '../../lib/theme';
 import MacroSummaryCard from '../../components/MacroSummaryCard';
 import MealGroupCard from '../../components/MealGroupCard';
+import FoodDetailSheet from '../../components/FoodDetailSheet';
 import StreakCelebration from '../../components/StreakCelebration';
 import Toast from '../../components/Toast';
+import { BluCalWordmark } from '../../components/BluCalWordmark';
 import { groupEntries } from '../../lib/groupEntries';
 import { sessionState } from '../../lib/sessionState';
 import { useToast } from '../../lib/useToast';
 import { useAuth } from '../../lib/AuthContext';
 import {
   addWaterEntry,
-  calculateMomentumScore,
   getCurrentMacroTarget,
   getFeelingEntriesForDate,
   getFoodEntriesForDate,
@@ -39,24 +40,37 @@ import {
   resetWaterForDate,
   setWaterExact,
 } from '../../lib/db';
-import type { FoodEntry, MacroTarget } from '../../lib/types';
+import type { CustomFood, FoodEntry, MacroTarget } from '../../lib/types';
 
 // TODO: make this user-configurable in settings later
 const WATER_TARGET_OZ = 80;
 
-function Header({
-  initials,
-  title,
-  dateLabel,
-  streak,
-  momentum,
-}: {
-  initials: string;
-  title: string;
-  dateLabel: string;
-  streak: number;
-  momentum: number;
-}) {
+// Reshape a logged FoodEntry into the CustomFood shape FoodDetailSheet reads,
+// so a past-day entry can be inspected in a read-only detail sheet.
+function entryToDetailFood(entry: FoodEntry): CustomFood {
+  return {
+    id: entry.id,
+    user_id: entry.user_id,
+    name: entry.name,
+    brand: null,
+    barcode: entry.barcode,
+    serving_size: entry.quantity,
+    serving_unit: entry.unit,
+    calories: entry.calories,
+    protein_g: Number(entry.protein_g),
+    carbs_g: Number(entry.carbs_g),
+    fat_g: Number(entry.fat_g),
+    fiber_g: entry.fiber_g,
+    sugar_g: entry.sugar_g,
+    sodium_mg: entry.sodium_mg,
+    saturated_fat_g: entry.saturated_fat_g,
+    cholesterol_mg: entry.cholesterol_mg,
+    is_public: false,
+    created_at: entry.created_at,
+  };
+}
+
+function Header({ initials, streak }: { initials: string; streak: number }) {
   const t = useTheme();
   return (
     <View
@@ -65,64 +79,48 @@ function Header({
         paddingTop: space.sm,
         paddingBottom: space.xs,
         flexDirection: 'row',
-        alignItems: 'flex-start',
+        alignItems: 'center',
+        justifyContent: 'space-between',
       }}
     >
-      <View style={{ flex: 1 }}>
-        <Text style={[typo.title1, { color: t.text }]}>{title}</Text>
-        <Text style={[typo.subhead, { color: t.textSec, marginTop: 2 }]}>
-          {dateLabel}
-        </Text>
-      </View>
-      {momentum >= 70 && (
-        <View
-          style={{
-            flexDirection: 'row',
-            alignItems: 'center',
-            gap: 4,
-            paddingHorizontal: space.sm,
-            paddingVertical: 2,
-            borderRadius: radius.pill,
-            backgroundColor: t.successSoft,
-            marginRight: space.sm,
-          }}
-        >
-          <Text style={[typo.caption1, { color: t.success, fontWeight: '600' }]}>
-            {momentum}
-          </Text>
-          <Text style={[typo.caption2, { color: t.success }]}>momentum</Text>
-        </View>
-      )}
-      {streak >= 2 && (
-        <View
-          style={{
-            flexDirection: 'row',
-            alignItems: 'center',
-            gap: 4,
-            paddingHorizontal: 10,
-            paddingVertical: 4,
-            borderRadius: radius.pill,
-            backgroundColor: t.warnSoft,
-            marginRight: space.sm,
-          }}
-        >
-          <Ionicons name="flame-outline" size={14} color={t.warn} />
-          <Text style={[typo.caption1, { color: t.warn, fontWeight: '600' }]}>
-            {streak}
-          </Text>
-        </View>
-      )}
+      <BluCalWordmark size={22} />
       <View
-        style={{
-          width: 32,
-          height: 32,
-          borderRadius: 16,
-          backgroundColor: t.primarySoft,
-          alignItems: 'center',
-          justifyContent: 'center',
-        }}
+        style={{ flexDirection: 'row', alignItems: 'center', gap: space.sm }}
       >
-        <Text style={[typo.subheadEm, { color: t.primary }]}>{initials}</Text>
+        {streak >= 2 && (
+          <View
+            style={{
+              height: 36,
+              paddingHorizontal: 12,
+              borderRadius: 18,
+              backgroundColor: t.primarySoft,
+              flexDirection: 'row',
+              alignItems: 'center',
+              gap: 4,
+            }}
+          >
+            <Text style={{ fontSize: 18 }}>🔥</Text>
+            <Text
+              style={[typo.subhead, { color: t.primary, fontWeight: '800' }]}
+            >
+              {streak}
+            </Text>
+          </View>
+        )}
+        <View
+          style={{
+            width: 36,
+            height: 36,
+            borderRadius: 18,
+            backgroundColor: t.primarySoft,
+            alignItems: 'center',
+            justifyContent: 'center',
+          }}
+        >
+          <Text style={[typo.subheadEm, { color: t.primary }]}>
+            {initials}
+          </Text>
+        </View>
       </View>
     </View>
   );
@@ -533,12 +531,12 @@ export default function Today() {
   const [entries, setEntries] = useState<FoodEntry[]>([]);
   const [macroTarget, setMacroTarget] = useState<MacroTarget | null>(null);
   const [streak, setStreak] = useState(0);
-  const [momentum, setMomentum] = useState(0);
   const [waterOz, setWaterOz] = useState(0);
   const [hasFeelingToday, setHasFeelingToday] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [selectedDate, setSelectedDate] = useState(new Date());
+  const [readOnlyFood, setReadOnlyFood] = useState<CustomFood | null>(null);
 
   const [feelingDismissed, setFeelingDismissed] = useState(false);
   const [waterSheetOpen, setWaterSheetOpen] = useState(false);
@@ -558,28 +556,26 @@ export default function Today() {
     try {
       setLoading(true);
       setError(null);
-      const [todayEntries, target, currentStreak, water, feelings, score] =
+      const [todayEntries, target, currentStreak, water, feelings] =
         await Promise.all([
           getFoodEntriesForDate(user.id, selectedDate),
           getCurrentMacroTarget(user.id),
           getStreak(user.id),
           getWaterForDate(user.id, selectedDate),
           getFeelingEntriesForDate(user.id, selectedDate),
-          calculateMomentumScore(user.id, profile?.goal ?? 'maintain'),
         ]);
       setEntries(todayEntries);
       setMacroTarget(target);
       setStreak(currentStreak);
       setWaterOz(water);
       setHasFeelingToday(feelings.length > 0);
-      setMomentum(score);
       lastLoadTime.current = Date.now();
     } catch {
       setError('Could not load your food log. Pull down to retry.');
     } finally {
       setLoading(false);
     }
-  }, [user, profile?.goal, selectedDate]);
+  }, [user, selectedDate]);
 
   const handleAddWater = useCallback(
     async (oz: number) => {
@@ -639,16 +635,17 @@ export default function Today() {
     useCallback(() => {
       setFeelingDismissed(sessionState.getFeelingDismissed());
       const logged = sessionState.getJustLoggedFood();
+      const needsRefresh = sessionState.getNeedsRefresh();
       if (logged) {
         toast.show(`Added: ${logged}`, 'success');
         sessionState.setJustLoggedFood(null);
       }
+      if (needsRefresh) sessionState.setNeedsRefresh(false);
       if (!user) return;
-      // Force a reload if the user just logged food (local state is now
-      // stale by definition); otherwise reload only when data is older
-      // than 60s.
+      // Force a reload if the user just logged food or another screen flagged
+      // a data change; otherwise reload only when data is older than 60s.
       const now = Date.now();
-      if (logged || now - lastLoadTime.current > 60000) {
+      if (logged || needsRefresh || now - lastLoadTime.current > 60000) {
         void loadTodayData();
       }
     }, [user, loadTodayData, toast]),
@@ -764,36 +761,28 @@ export default function Today() {
           />
         }
       >
-        <Header
-          initials={initials}
-          title={isToday ? 'Today' : 'Past day'}
-          dateLabel={fullDateLabel}
-          streak={streak}
-          momentum={momentum}
-        />
+        <Header initials={initials} streak={streak} />
 
-        {/* Date navigator */}
+        {/* Date navigator — its own centered row just below the header */}
         <View
           style={{
             flexDirection: 'row',
             alignItems: 'center',
             justifyContent: 'center',
-            gap: space.lg,
-            paddingVertical: space.sm,
+            gap: space.md,
+            paddingVertical: 6,
           }}
         >
-          <Pressable onPress={goToPrevDay} hitSlop={12}>
-            <Ionicons name="chevron-back" size={22} color={t.primary} />
+          <Pressable onPress={goToPrevDay} hitSlop={16}>
+            <Ionicons name="chevron-back" size={18} color={t.textSec} />
           </Pressable>
           <Pressable onPress={() => setSelectedDate(new Date())}>
             <Text
               style={[
-                typo.subhead,
+                typo.caption1,
                 {
-                  color: isToday ? t.primary : t.text,
+                  color: isToday ? t.primary : t.textSec,
                   fontWeight: '600',
-                  minWidth: 160,
-                  textAlign: 'center',
                 },
               ]}
             >
@@ -802,10 +791,10 @@ export default function Today() {
           </Pressable>
           <Pressable
             onPress={goToNextDay}
-            hitSlop={12}
+            hitSlop={16}
             style={{ opacity: isToday ? 0.3 : 1 }}
           >
-            <Ionicons name="chevron-forward" size={22} color={t.primary} />
+            <Ionicons name="chevron-forward" size={18} color={t.textSec} />
           </Pressable>
         </View>
 
@@ -1014,7 +1003,14 @@ export default function Today() {
         ) : (
           <View style={{ paddingHorizontal: space.lg, gap: 10 }}>
             {groups.map((g) => (
-              <MealGroupCard key={g.id} group={g} readOnly={!isToday} />
+              <MealGroupCard
+                key={g.id}
+                group={g}
+                readOnly={!isToday}
+                onReadOnlyPress={(item) =>
+                  setReadOnlyFood(entryToDetailFood(item))
+                }
+              />
             ))}
           </View>
         )}
@@ -1042,6 +1038,26 @@ export default function Today() {
         onAdd={handleAddWater}
         onSetExact={handleSetExactWater}
         onReset={handleResetWater}
+      />
+
+      {/* Read-only detail for a tapped past-day entry */}
+      <FoodDetailSheet
+        food={readOnlyFood}
+        readOnly
+        currentMacros={{
+          cal: Math.round(totalCal),
+          protein: Math.round(totalP),
+          carbs: Math.round(totalC),
+          fat: Math.round(totalF),
+        }}
+        targets={{
+          cal: targetCal,
+          protein: targetP,
+          carbs: targetC,
+          fat: targetF,
+        }}
+        onDismiss={() => setReadOnlyFood(null)}
+        onLog={() => {}}
       />
 
       <Toast

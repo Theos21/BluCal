@@ -5,6 +5,10 @@ let _feelingDismissed = false;
 let _justLoggedFood: string | null = null;
 let _celebrationDismissedForStreak: number = 0;
 let _bluAITipDismissed = false;
+// Set by screens that mutate data (logging food, creating a custom food or
+// recipe) so a screen regaining focus knows to refetch its lists immediately
+// rather than waiting for a pull-to-refresh.
+let _needsRefresh = false;
 
 export const sessionState = {
   getFeelingDismissed: () => _feelingDismissed,
@@ -14,6 +18,10 @@ export const sessionState = {
   getJustLoggedFood: () => _justLoggedFood,
   setJustLoggedFood: (name: string | null) => {
     _justLoggedFood = name;
+  },
+  getNeedsRefresh: () => _needsRefresh,
+  setNeedsRefresh: (val: boolean) => {
+    _needsRefresh = val;
   },
   getCelebrationDismissedForStreak: () => _celebrationDismissedForStreak,
   setCelebrationDismissedForStreak: (streak: number) => {

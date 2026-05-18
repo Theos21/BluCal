@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -14,7 +14,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { router } from 'expo-router';
+import { router, useFocusEffect } from 'expo-router';
 import {
   ExpoSpeechRecognitionModule,
   useSpeechRecognitionEvent,
@@ -60,6 +60,8 @@ type RichRow = {
   onAdd: () => void;
   // When set, a trailing trash button removes the item.
   onDelete?: () => void;
+  // When set, a trailing pencil button edits the item.
+  onEdit?: () => void;
 };
 
 const formatFoodName = (name: string): string => {
@@ -459,6 +461,24 @@ function RichFoodRowItem({
           </View>
         </View>
 
+        {row.onEdit && (
+          <Pressable
+            onPress={row.onEdit}
+            hitSlop={8}
+            style={({ pressed }) => ({
+              width: 34,
+              height: 34,
+              borderRadius: 17,
+              backgroundColor: t.surface2,
+              alignItems: 'center',
+              justifyContent: 'center',
+              flexShrink: 0,
+              opacity: pressed ? 0.6 : 1,
+            })}
+          >
+            <Ionicons name="pencil" size={16} color={t.textSec} />
+          </Pressable>
+        )}
         {row.onDelete && (
           <Pressable
             onPress={row.onDelete}
@@ -583,38 +603,42 @@ function CommunityFoodsSection({
   foods,
   onOpenDetail,
   onLog,
+  hideHeader,
 }: {
   foods: CustomFood[];
   onOpenDetail: (food: CustomFood) => void;
   onLog: (food: CustomFood) => void;
+  hideHeader?: boolean;
 }) {
   const t = useTheme();
   return (
-    <View style={{ marginTop: space.lg }}>
-      <View
-        style={{
-          flexDirection: 'row',
-          alignItems: 'center',
-          gap: space.sm,
-          paddingHorizontal: space.lg,
-          marginBottom: space.sm,
-        }}
-      >
-        <Ionicons name="people-outline" size={14} color={t.teal} />
-        <Text
-          style={[
-            typo.caption1,
-            {
-              color: t.teal,
-              fontWeight: '700',
-              textTransform: 'uppercase',
-              letterSpacing: 0.5,
-            },
-          ]}
+    <View style={{ marginTop: hideHeader ? 0 : space.lg }}>
+      {!hideHeader && (
+        <View
+          style={{
+            flexDirection: 'row',
+            alignItems: 'center',
+            gap: space.sm,
+            paddingHorizontal: space.lg,
+            marginBottom: space.sm,
+          }}
         >
-          BluCal Community
-        </Text>
-      </View>
+          <Ionicons name="people-outline" size={14} color={t.teal} />
+          <Text
+            style={[
+              typo.caption1,
+              {
+                color: t.teal,
+                fontWeight: '700',
+                textTransform: 'uppercase',
+                letterSpacing: 0.5,
+              },
+            ]}
+          >
+            BluCal Community
+          </Text>
+        </View>
+      )}
       {foods.map((food) => (
         <Pressable
           key={food.id}
@@ -785,6 +809,9 @@ export default function LogFood() {
   const [myRecipes, setMyRecipes] = useState<RecipeWithMacros[]>([]);
   const [myFoods, setMyFoods] = useState<CustomFood[]>([]);
   const [communityFoods, setCommunityFoods] = useState<CustomFood[]>([]);
+  const [allCommunityFoods, setAllCommunityFoods] = useState<CustomFood[]>([]);
+  const [showCommunityBrowser, setShowCommunityBrowser] = useState(false);
+  const [communityQuery, setCommunityQuery] = useState('');
   const [todayEntries, setTodayEntries] = useState<FoodEntry[]>([]);
   const [macroTarget, setMacroTarget] = useState<MacroTarget | null>(null);
   const [detail, setDetail] = useState<{
@@ -859,28 +886,48 @@ export default function LogFood() {
     });
   };
 
-  useEffect(() => {
+  const loadData = useCallback(async () => {
     if (!user) {
       setLoading(false);
       return;
     }
-    Promise.all([
-      getRecentFoods(user.id),
-      getRecipesWithMacros(user.id),
-      getCustomFoods(user.id),
-      getFoodEntriesForDate(user.id, new Date()),
-      getCurrentMacroTarget(user.id),
-    ])
-      .then(([recent, recipes, custom, today, target]) => {
-        setRecentFoods(recent);
-        setMyRecipes(recipes);
-        setMyFoods(custom);
-        setTodayEntries(today);
-        setMacroTarget(target);
-      })
-      .catch(console.error)
-      .finally(() => setLoading(false));
+    try {
+      const [recent, recipes, custom, today, target, community] =
+        await Promise.all([
+          getRecentFoods(user.id),
+          getRecipesWithMacros(user.id),
+          getCustomFoods(user.id),
+          getFoodEntriesForDate(user.id, new Date()),
+          getCurrentMacroTarget(user.id),
+          getCommunityFoods(''),
+        ]);
+      setRecentFoods(recent);
+      setMyRecipes(recipes);
+      setMyFoods(custom);
+      setTodayEntries(today);
+      setMacroTarget(target);
+      setAllCommunityFoods(community);
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setLoading(false);
+    }
   }, [user]);
+
+  useEffect(() => {
+    void loadData();
+  }, [loadData]);
+
+  // Refetch lists when returning to this screen after a custom food or recipe
+  // was created elsewhere, so new items appear without a manual refresh.
+  useFocusEffect(
+    useCallback(() => {
+      if (sessionState.getNeedsRefresh()) {
+        sessionState.setNeedsRefresh(false);
+        void loadData();
+      }
+    }, [loadData]),
+  );
 
   useEffect(() => {
     return () => {
@@ -949,6 +996,7 @@ export default function LogFood() {
         source: 'search',
       });
       sessionState.setJustLoggedFood(food.name);
+      sessionState.setNeedsRefresh(true);
       toast.show(`Added: ${food.name}`, 'success');
       setTimeout(() => router.back(), 800);
     } catch {
@@ -980,6 +1028,7 @@ export default function LogFood() {
         source: entry.source ?? 'manual',
       });
       sessionState.setJustLoggedFood(entry.name);
+      sessionState.setNeedsRefresh(true);
       toast.show(`Added: ${entry.name}`, 'success');
       setTimeout(() => router.back(), 800);
     } catch {
@@ -1012,6 +1061,7 @@ export default function LogFood() {
         source: 'search',
       });
       sessionState.setJustLoggedFood(food.name);
+      sessionState.setNeedsRefresh(true);
       toast.show(`Added: ${food.name}`, 'success');
       setTimeout(() => router.back(), 800);
     } catch {
@@ -1080,6 +1130,30 @@ export default function LogFood() {
     );
   };
 
+  const handleEditCustomFood = (food: CustomFood) => {
+    router.push({
+      pathname: '/custom-food',
+      params: {
+        editId: food.id,
+        prefillName: food.name,
+        prefillBrand: food.brand ?? '',
+        prefillBarcode: food.barcode ?? '',
+        prefillCal: String(food.calories),
+        prefillProtein: String(food.protein_g),
+        prefillCarbs: String(food.carbs_g),
+        prefillFat: String(food.fat_g),
+        prefillFiber: String(food.fiber_g ?? 0),
+        prefillSugar: String(food.sugar_g ?? 0),
+        prefillSodium: String(food.sodium_mg ?? 0),
+        prefillSatFat: String(food.saturated_fat_g ?? 0),
+        prefillCholesterol: String(food.cholesterol_mg ?? 0),
+        prefillServingSize: String(food.serving_size),
+        prefillServingUnit: food.serving_unit,
+        isShared: food.is_public ? '1' : '0',
+      },
+    });
+  };
+
   const handleDeleteRecipe = (recipe: RecipeWithMacros) => {
     Alert.alert(
       'Delete recipe?',
@@ -1146,6 +1220,7 @@ export default function LogFood() {
         source: 'recipe',
       });
       sessionState.setJustLoggedFood(loggingRecipe.name);
+      sessionState.setNeedsRefresh(true);
       toast.show(
         `${loggingRecipe.name} logged for ${servings} serving${servings !== 1 ? 's' : ''}.`,
         'success',
@@ -1181,10 +1256,18 @@ export default function LogFood() {
     fat_g: Number(food.fat_g),
     onPress: () => openCustomFoodDetail(food),
     onAdd: () => void handleSelectCustomFood(food),
+    onEdit: () => handleEditCustomFood(food),
     onDelete: () => handleDeleteCustomFood(food),
   }));
 
   const isSearching = searchQuery.trim().length > 0;
+
+  // Community foods filtered by the browser modal's search field.
+  const filteredCommunityFoods = communityQuery.trim()
+    ? allCommunityFoods.filter((f) =>
+        f.name.toLowerCase().includes(communityQuery.trim().toLowerCase()),
+      )
+    : allCommunityFoods;
 
   // Today's running totals and targets, fed to the detail sheet so its
   // preview rings show how a food would move each macro.
@@ -1323,6 +1406,35 @@ export default function LogFood() {
               rows={myFoodRows}
               emptyState={<MyFoodsEmptyState />}
             />
+            {profile?.show_community_foods !== false &&
+              allCommunityFoods.length > 0 && (
+                <View>
+                  <CommunityFoodsSection
+                    foods={allCommunityFoods.slice(0, 5)}
+                    onOpenDetail={openCustomFoodDetail}
+                    onLog={handleSelectCustomFood}
+                  />
+                  <Pressable
+                    onPress={() => setShowCommunityBrowser(true)}
+                    style={({ pressed }) => ({
+                      marginHorizontal: space.lg,
+                      marginTop: space.xs,
+                      paddingVertical: space.sm,
+                      alignItems: 'center',
+                      opacity: pressed ? 0.6 : 1,
+                    })}
+                  >
+                    <Text
+                      style={[
+                        typo.subhead,
+                        { color: t.teal, fontWeight: '600' },
+                      ]}
+                    >
+                      See all community foods
+                    </Text>
+                  </Pressable>
+                </View>
+              )}
             <Section
               label="My recipes"
               rows={recipeRows}
@@ -1591,6 +1703,104 @@ export default function LogFood() {
           </Pressable>
         </View>
         </KeyboardAvoidingView>
+      </Modal>
+
+      {/* Community foods browser */}
+      <Modal
+        visible={showCommunityBrowser}
+        animationType="slide"
+        presentationStyle="pageSheet"
+        onRequestClose={() => setShowCommunityBrowser(false)}
+      >
+        <View style={{ flex: 1, backgroundColor: t.bg }}>
+          <View
+            style={{
+              flexDirection: 'row',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              padding: space.lg,
+              paddingTop: space.xl,
+            }}
+          >
+            <Text style={[typo.title2, { color: t.text, fontWeight: '700' }]}>
+              BluCal Community
+            </Text>
+            <Pressable
+              hitSlop={8}
+              onPress={() => {
+                setShowCommunityBrowser(false);
+                setCommunityQuery('');
+              }}
+              style={({ pressed }) => ({ opacity: pressed ? 0.6 : 1 })}
+            >
+              <Ionicons name="close-circle" size={28} color={t.textTer} />
+            </Pressable>
+          </View>
+          <View
+            style={{
+              marginHorizontal: space.lg,
+              marginBottom: space.sm,
+              backgroundColor: t.surface2,
+              borderRadius: radius.lg,
+              flexDirection: 'row',
+              alignItems: 'center',
+              paddingHorizontal: 14,
+              paddingVertical: 10,
+              gap: 10,
+            }}
+          >
+            <Ionicons name="search-outline" size={18} color={t.textTer} />
+            <TextInput
+              value={communityQuery}
+              onChangeText={setCommunityQuery}
+              placeholder="Search community foods…"
+              placeholderTextColor={t.textTer}
+              autoCorrect={false}
+              autoCapitalize="none"
+              returnKeyType="search"
+              style={[typo.body, { flex: 1, color: t.text, padding: 0 }]}
+            />
+          </View>
+          <ScrollView
+            style={{ flex: 1 }}
+            keyboardShouldPersistTaps="handled"
+            showsVerticalScrollIndicator={false}
+            contentContainerStyle={{ paddingBottom: space.xxxl }}
+          >
+            {filteredCommunityFoods.length === 0 ? (
+              <View
+                style={{ alignItems: 'center', paddingVertical: space.xxxl }}
+              >
+                <Ionicons
+                  name="people-outline"
+                  size={36}
+                  color={t.textTer}
+                />
+                <Text
+                  style={[
+                    typo.subhead,
+                    { color: t.textTer, marginTop: space.sm },
+                  ]}
+                >
+                  No community foods found
+                </Text>
+              </View>
+            ) : (
+              <CommunityFoodsSection
+                foods={filteredCommunityFoods}
+                hideHeader
+                onOpenDetail={(food) => {
+                  setShowCommunityBrowser(false);
+                  openCustomFoodDetail(food);
+                }}
+                onLog={(food) => {
+                  setShowCommunityBrowser(false);
+                  void handleSelectCustomFood(food);
+                }}
+              />
+            )}
+          </ScrollView>
+        </View>
       </Modal>
 
       <FoodDetailSheet

@@ -20,6 +20,7 @@ import Toast from '../components/Toast';
 import { useToast } from '../lib/useToast';
 import { useAuth } from '../lib/AuthContext';
 import { addRecipe } from '../lib/db';
+import { sessionState } from '../lib/sessionState';
 import { importRecipeFromUrl } from '../lib/recipeImport';
 import { searchFoods, type FoodSearchResult } from '../lib/foodSearch';
 
@@ -248,6 +249,7 @@ export default function RecipeBuilder() {
           sort_order: i,
         })),
       );
+      sessionState.setNeedsRefresh(true);
       toast.show('Recipe saved to your library', 'success');
       setTimeout(() => router.back(), 800);
     } catch {

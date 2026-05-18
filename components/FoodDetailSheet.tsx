@@ -27,6 +27,9 @@ interface FoodDetailSheetProps {
   onLog: () => void;
   currentMacros: Macros;
   targets: Macros;
+  // When true the sheet is a pure read-only display: no preview rings, no
+  // "Add to log" action. Used to inspect a logged entry on a past day.
+  readOnly?: boolean;
 }
 
 // Title-cases food names so all-caps database entries render cleanly.
@@ -190,6 +193,7 @@ export default function FoodDetailSheet({
   onLog,
   currentMacros,
   targets,
+  readOnly,
 }: FoodDetailSheetProps) {
   const t = useTheme();
   const insets = useSafeAreaInsets();
@@ -287,6 +291,34 @@ export default function FoodDetailSheet({
               paddingBottom: space.lg,
             }}
           >
+            {/* Past-entry label — read-only mode only */}
+            {readOnly && (
+              <View
+                style={{
+                  alignSelf: 'flex-start',
+                  backgroundColor: t.surface2,
+                  borderRadius: radius.sm,
+                  paddingHorizontal: space.sm,
+                  paddingVertical: 3,
+                  marginBottom: space.xs,
+                }}
+              >
+                <Text
+                  style={[
+                    typo.caption2,
+                    {
+                      color: t.textSec,
+                      fontWeight: '700',
+                      textTransform: 'uppercase',
+                      letterSpacing: 0.5,
+                    },
+                  ]}
+                >
+                  Past entry
+                </Text>
+              </View>
+            )}
+
             {/* Name + brand */}
             <Text style={[typo.title3, { color: t.text }]}>{name}</Text>
             {brand && (
@@ -297,47 +329,49 @@ export default function FoodDetailSheet({
               </Text>
             )}
 
-            {/* Preview rings */}
-            <View
-              style={{
-                flexDirection: 'row',
-                justifyContent: 'space-around',
-                marginTop: space.xl,
-              }}
-            >
-              <PreviewRing
-                label="Calories"
-                current={currentMacros.cal}
-                target={targets.cal}
-                adding={cal}
-                color={t.primary}
-                t={t}
-              />
-              <PreviewRing
-                label="Protein"
-                current={currentMacros.protein}
-                target={targets.protein}
-                adding={protein}
-                color={t.protein}
-                t={t}
-              />
-              <PreviewRing
-                label="Carbs"
-                current={currentMacros.carbs}
-                target={targets.carbs}
-                adding={carbs}
-                color={t.carbs}
-                t={t}
-              />
-              <PreviewRing
-                label="Fat"
-                current={currentMacros.fat}
-                target={targets.fat}
-                adding={fat}
-                color={t.fat}
-                t={t}
-              />
-            </View>
+            {/* Preview rings — hidden in read-only mode (nothing is being added) */}
+            {!readOnly && (
+              <View
+                style={{
+                  flexDirection: 'row',
+                  justifyContent: 'space-around',
+                  marginTop: space.xl,
+                }}
+              >
+                <PreviewRing
+                  label="Calories"
+                  current={currentMacros.cal}
+                  target={targets.cal}
+                  adding={cal}
+                  color={t.primary}
+                  t={t}
+                />
+                <PreviewRing
+                  label="Protein"
+                  current={currentMacros.protein}
+                  target={targets.protein}
+                  adding={protein}
+                  color={t.protein}
+                  t={t}
+                />
+                <PreviewRing
+                  label="Carbs"
+                  current={currentMacros.carbs}
+                  target={targets.carbs}
+                  adding={carbs}
+                  color={t.carbs}
+                  t={t}
+                />
+                <PreviewRing
+                  label="Fat"
+                  current={currentMacros.fat}
+                  target={targets.fat}
+                  adding={fat}
+                  color={t.fat}
+                  t={t}
+                />
+              </View>
+            )}
 
             {/* Full nutrition table */}
             <View
@@ -406,7 +440,8 @@ export default function FoodDetailSheet({
             )}
           </ScrollView>
 
-          {/* Footer: Cancel link above a large primary action */}
+          {/* Footer: a single Close action in read-only mode, otherwise a
+              Cancel link above the primary "Add to log" button. */}
           <View
             style={{
               paddingHorizontal: space.xl,
@@ -416,33 +451,53 @@ export default function FoodDetailSheet({
               borderTopColor: t.hairline,
             }}
           >
-            <Pressable
-              onPress={onDismiss}
-              hitSlop={6}
-              style={({ pressed }) => ({
-                alignSelf: 'center',
-                paddingVertical: space.sm,
-                opacity: pressed ? 0.6 : 1,
-              })}
-            >
-              <Text style={[typo.subhead, { color: t.textSec }]}>Cancel</Text>
-            </Pressable>
-            <Pressable
-              onPress={onLog}
-              style={({ pressed }) => ({
-                height: 52,
-                borderRadius: radius.lg,
-                backgroundColor: t.primary,
-                alignItems: 'center',
-                justifyContent: 'center',
-                marginTop: space.xs,
-                opacity: pressed ? 0.85 : 1,
-              })}
-            >
-              <Text style={[typo.headline, { color: t.textOnPrim }]}>
-                Add to log
-              </Text>
-            </Pressable>
+            {readOnly ? (
+              <Pressable
+                onPress={onDismiss}
+                style={({ pressed }) => ({
+                  height: 52,
+                  borderRadius: radius.lg,
+                  backgroundColor: t.surface2,
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  opacity: pressed ? 0.6 : 1,
+                })}
+              >
+                <Text style={[typo.headline, { color: t.text }]}>Close</Text>
+              </Pressable>
+            ) : (
+              <>
+                <Pressable
+                  onPress={onDismiss}
+                  hitSlop={6}
+                  style={({ pressed }) => ({
+                    alignSelf: 'center',
+                    paddingVertical: space.sm,
+                    opacity: pressed ? 0.6 : 1,
+                  })}
+                >
+                  <Text style={[typo.subhead, { color: t.textSec }]}>
+                    Cancel
+                  </Text>
+                </Pressable>
+                <Pressable
+                  onPress={onLog}
+                  style={({ pressed }) => ({
+                    height: 52,
+                    borderRadius: radius.lg,
+                    backgroundColor: t.primary,
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    marginTop: space.xs,
+                    opacity: pressed ? 0.85 : 1,
+                  })}
+                >
+                  <Text style={[typo.headline, { color: t.textOnPrim }]}>
+                    Add to log
+                  </Text>
+                </Pressable>
+              </>
+            )}
           </View>
         </Pressable>
       </Pressable>

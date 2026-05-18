@@ -589,6 +589,21 @@ export const deleteCustomFood = async (id: string): Promise<void> => {
   if (error) throw error;
 };
 
+// Updates an existing custom food. Scoped to the owner via user_id so a
+// stale or spoofed id cannot edit another user's row (RLS enforces this too).
+export const updateCustomFood = async (
+  id: string,
+  userId: string,
+  updates: Partial<Omit<CustomFood, 'id' | 'user_id' | 'created_at'>>,
+): Promise<void> => {
+  const { error } = await supabase
+    .from('custom_foods')
+    .update(updates)
+    .eq('id', id)
+    .eq('user_id', userId);
+  if (error) throw error;
+};
+
 // ── Recipes ──────────────────────────────────────────────────────────────────
 export const getRecipes = async (userId: string): Promise<Recipe[]> => {
   const { data, error } = await supabase

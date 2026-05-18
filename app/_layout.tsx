@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useRef } from 'react';
 import { Text, View } from 'react-native';
 import { Stack, useRouter } from 'expo-router';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
@@ -73,18 +73,34 @@ function RootNavigator() {
   const router = useRouter();
   const { session, profile, isReady, refreshProfile } = useAuth();
 
+  // Tracks the last destination this navigator routed to. The routing effect
+  // below re-runs whenever `profile` changes reference — including harmless
+  // updates like a settings toggle that calls refreshProfile. Without this
+  // guard every such update fired router.replace('/(tabs)'), yanking the user
+  // back to the Today tab. We only navigate when the destination changes.
+  const lastRouteRef = useRef<'welcome' | 'onboarding' | 'tabs' | null>(null);
+
   useEffect(() => {
     if (!isReady) return;
     if (!session) {
-      router.replace('/(auth)/welcome');
+      if (lastRouteRef.current !== 'welcome') {
+        lastRouteRef.current = 'welcome';
+        router.replace('/(auth)/welcome');
+      }
       return;
     }
     if (profile === undefined) return; // profile still loading in the background
     if (profile === null || !profile.goal) {
-      router.replace('/(auth)/onboarding');
+      if (lastRouteRef.current !== 'onboarding') {
+        lastRouteRef.current = 'onboarding';
+        router.replace('/(auth)/onboarding');
+      }
       return;
     }
-    router.replace('/(tabs)');
+    if (lastRouteRef.current !== 'tabs') {
+      lastRouteRef.current = 'tabs';
+      router.replace('/(tabs)');
+    }
   }, [session, profile, isReady, router]);
 
   // Hand the native splash off directly to the app once it can render its

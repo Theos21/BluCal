@@ -2,13 +2,21 @@ import { Pressable, Text, View } from 'react-native';
 import { router } from 'expo-router';
 import { radius, type as typo, useTheme } from '../lib/theme';
 import type { MealGroup } from '../lib/groupEntries';
+import type { FoodEntry } from '../lib/types';
 
 type Props = {
   group: MealGroup;
   readOnly?: boolean;
+  // When set (past days), tapping a row calls this instead of navigating to
+  // the editable entry-detail screen.
+  onReadOnlyPress?: (item: FoodEntry) => void;
 };
 
-export default function MealGroupCard({ group, readOnly }: Props) {
+export default function MealGroupCard({
+  group,
+  readOnly,
+  onReadOnlyPress,
+}: Props) {
   const t = useTheme();
 
   return (
@@ -76,7 +84,11 @@ export default function MealGroupCard({ group, readOnly }: Props) {
         return (
           <View key={item.id}>
             <Pressable
-              onPress={() =>
+              onPress={() => {
+                if (readOnly && onReadOnlyPress) {
+                  onReadOnlyPress(item);
+                  return;
+                }
                 router.push({
                   pathname: '/entry-detail',
                   params: {
@@ -95,8 +107,8 @@ export default function MealGroupCard({ group, readOnly }: Props) {
                     logged_at: item.logged_at,
                     readOnly: readOnly ? '1' : '',
                   },
-                })
-              }
+                });
+              }}
               style={({ pressed }) => ({
                 paddingHorizontal: 12,
                 paddingVertical: 8,

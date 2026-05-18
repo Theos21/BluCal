@@ -21,8 +21,9 @@ import { radius, space, type as typo, useTheme, type Theme } from '../lib/theme'
 import Toast from '../components/Toast';
 import { useToast } from '../lib/useToast';
 import { useAuth } from '../lib/AuthContext';
-import { addCustomFood } from '../lib/db';
+import { addCustomFood, updateCustomFood } from '../lib/db';
 import { scanNutritionLabel } from '../lib/bluai';
+import { sessionState } from '../lib/sessionState';
 
 const UNITS = ['g', 'oz', 'ml', 'cup', 'tbsp', 'tsp', 'piece', 'serving'] as const;
 
@@ -110,8 +111,12 @@ export default function CustomFood() {
 
   const params = useLocalSearchParams<{
     fromLabelScan?: string;
+    editId?: string;
     prefillName?: string;
+    prefillBrand?: string;
+    prefillBarcode?: string;
     prefillServingSize?: string;
+    prefillServingUnit?: string;
     prefillCal?: string;
     prefillProtein?: string;
     prefillCarbs?: string;
@@ -121,19 +126,24 @@ export default function CustomFood() {
     prefillSodium?: string;
     prefillSatFat?: string;
     prefillCholesterol?: string;
+    isShared?: string;
   }>();
   const param = (v: string | undefined): string =>
     typeof v === 'string' ? v : '';
   const fromLabelScan = param(params.fromLabelScan) === '1';
+  const isEditing = !!params.editId;
 
   const [saving, setSaving] = useState(false);
   const [name, setName] = useState(param(params.prefillName));
-  const [brand, setBrand] = useState('');
-  const [barcode, setBarcode] = useState('');
+  const [brand, setBrand] = useState(param(params.prefillBrand));
+  const [barcode, setBarcode] = useState(param(params.prefillBarcode));
   const [servingSize, setServingSize] = useState(
     param(params.prefillServingSize) || '1',
   );
-  const [unitIdx, setUnitIdx] = useState(0);
+  const [unitIdx, setUnitIdx] = useState(() => {
+    const i = UNITS.findIndex((u) => u === param(params.prefillServingUnit));
+    return i >= 0 ? i : 0;
+  });
 
   const [cal, setCal] = useState(param(params.prefillCal));
   const [protein, setProtein] = useState(param(params.prefillProtein));
@@ -149,7 +159,9 @@ export default function CustomFood() {
     param(params.prefillCholesterol),
   );
 
-  const [shareCommunity, setShareCommunity] = useState(false);
+  const [shareCommunity, setShareCommunity] = useState(
+    param(params.isShared) === '1',
+  );
   const [attemptedSave, setAttemptedSave] = useState(false);
   const [scanningLabel, setScanningLabel] = useState(false);
   const [permission, requestPermission] = useCameraPermissions();
@@ -181,8 +193,7 @@ export default function CustomFood() {
     if (!user || saving) return;
     setSaving(true);
     try {
-      await addCustomFood({
-        user_id: user.id,
+      const foodData = {
         name: name.trim(),
         brand: brand.trim() || null,
         barcode: barcode || null,
@@ -198,8 +209,17 @@ export default function CustomFood() {
         saturated_fat_g: Number(satFat) || 0,
         cholesterol_mg: Number(cholesterol) || 0,
         is_public: shareCommunity,
-      });
-      toast.show('Food saved to your library', 'success');
+      };
+      if (isEditing) {
+        await updateCustomFood(params.editId!, user.id, foodData);
+      } else {
+        await addCustomFood({ user_id: user.id, ...foodData });
+      }
+      sessionState.setNeedsRefresh(true);
+      toast.show(
+        isEditing ? 'Food updated.' : 'Food saved to your library',
+        'success',
+      );
       setTimeout(() => router.back(), 800);
     } catch {
       toast.show('Could not save food. Try again.', 'error');
@@ -300,7 +320,7 @@ export default function CustomFood() {
               { color: t.text, textAlign: 'center', marginTop: 12 },
             ]}
           >
-            New food
+            {isEditing ? 'Edit food' : 'New food'}
           </Text>
           <Pressable
             onPress={() => router.back()}

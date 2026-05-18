@@ -815,35 +815,37 @@ export default function Onboarding() {
                 Tell us about yourself
               </Text>
 
-              <View style={{ marginTop: space.xl }}>
-                <Text
-                  style={[
-                    typo.subhead,
-                    { color: t.textSec, marginBottom: 6 },
-                  ]}
-                >
-                  Full name
-                </Text>
-                <TextInput
-                  value={name}
-                  onChangeText={setName}
-                  placeholder="John Smith"
-                  placeholderTextColor={t.textTer}
-                  textContentType="name"
-                  autoCapitalize="words"
-                  returnKeyType="next"
-                  style={[
-                    typo.body,
-                    {
-                      backgroundColor: t.surface2,
-                      borderRadius: radius.lg,
-                      paddingHorizontal: space.md,
-                      paddingVertical: space.sm,
-                      color: t.text,
-                    },
-                  ]}
-                />
-              </View>
+              {!profile?.name && (
+                <View style={{ marginTop: space.xl }}>
+                  <Text
+                    style={[
+                      typo.subhead,
+                      { color: t.textSec, marginBottom: 6 },
+                    ]}
+                  >
+                    Full name
+                  </Text>
+                  <TextInput
+                    value={name}
+                    onChangeText={setName}
+                    placeholder="John Smith"
+                    placeholderTextColor={t.textTer}
+                    textContentType="name"
+                    autoCapitalize="words"
+                    returnKeyType="next"
+                    style={[
+                      typo.body,
+                      {
+                        backgroundColor: t.surface2,
+                        borderRadius: radius.lg,
+                        paddingHorizontal: space.md,
+                        paddingVertical: space.sm,
+                        color: t.text,
+                      },
+                    ]}
+                  />
+                </View>
+              )}
 
               <View style={{ marginTop: space.lg }}>
                 <InputLabel>Biological sex</InputLabel>

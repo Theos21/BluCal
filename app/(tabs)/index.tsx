@@ -46,11 +46,13 @@ const WATER_TARGET_OZ = 80;
 
 function Header({
   initials,
+  title,
   dateLabel,
   streak,
   momentum,
 }: {
   initials: string;
+  title: string;
   dateLabel: string;
   streak: number;
   momentum: number;
@@ -67,7 +69,7 @@ function Header({
       }}
     >
       <View style={{ flex: 1 }}>
-        <Text style={[typo.title1, { color: t.text }]}>Today</Text>
+        <Text style={[typo.title1, { color: t.text }]}>{title}</Text>
         <Text style={[typo.subhead, { color: t.textSec, marginTop: 2 }]}>
           {dateLabel}
         </Text>
@@ -151,17 +153,19 @@ function WaterRow({
   target,
   onAdd,
   onOpenSheet,
+  readOnly,
 }: {
   oz: number;
   target: number;
   onAdd: (amount: number) => void;
   onOpenSheet: () => void;
+  readOnly?: boolean;
 }) {
   const t = useTheme();
   const pct = target > 0 ? Math.min(1, oz / target) : 0;
   return (
     <Pressable
-      onPress={onOpenSheet}
+      onPress={readOnly ? undefined : onOpenSheet}
       style={({ pressed }) => ({
         marginHorizontal: space.lg,
         marginTop: space.md,
@@ -227,10 +231,12 @@ function WaterRow({
           />
         </View>
       </View>
-      <View style={{ flexDirection: 'row', gap: space.xs }}>
-        <WaterPill label="+8oz" onPress={() => onAdd(8)} />
-        <WaterPill label="+16oz" onPress={() => onAdd(16)} />
-      </View>
+      {!readOnly && (
+        <View style={{ flexDirection: 'row', gap: space.xs }}>
+          <WaterPill label="+8oz" onPress={() => onAdd(8)} />
+          <WaterPill label="+16oz" onPress={() => onAdd(16)} />
+        </View>
+      )}
     </Pressable>
   );
 }
@@ -532,6 +538,7 @@ export default function Today() {
   const [hasFeelingToday, setHasFeelingToday] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [selectedDate, setSelectedDate] = useState(new Date());
 
   const [feelingDismissed, setFeelingDismissed] = useState(false);
   const [waterSheetOpen, setWaterSheetOpen] = useState(false);
@@ -553,11 +560,11 @@ export default function Today() {
       setError(null);
       const [todayEntries, target, currentStreak, water, feelings, score] =
         await Promise.all([
-          getFoodEntriesForDate(user.id, new Date()),
+          getFoodEntriesForDate(user.id, selectedDate),
           getCurrentMacroTarget(user.id),
           getStreak(user.id),
-          getWaterForDate(user.id, new Date()),
-          getFeelingEntriesForDate(user.id, new Date()),
+          getWaterForDate(user.id, selectedDate),
+          getFeelingEntriesForDate(user.id, selectedDate),
           calculateMomentumScore(user.id, profile?.goal ?? 'maintain'),
         ]);
       setEntries(todayEntries);
@@ -572,7 +579,7 @@ export default function Today() {
     } finally {
       setLoading(false);
     }
-  }, [user, profile?.goal]);
+  }, [user, profile?.goal, selectedDate]);
 
   const handleAddWater = useCallback(
     async (oz: number) => {
@@ -647,6 +654,19 @@ export default function Today() {
     }, [user, loadTodayData, toast]),
   );
 
+  // Reload immediately when the user navigates to a different day. The
+  // throttled focus effect would otherwise suppress the refresh.
+  const didMountRef = useRef(false);
+  useEffect(() => {
+    if (!didMountRef.current) {
+      didMountRef.current = true;
+      return;
+    }
+    lastLoadTime.current = Date.now();
+    void loadTodayData();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedDate]);
+
   const [showCelebration, setShowCelebration] = useState(false);
 
   useEffect(() => {
@@ -697,12 +717,27 @@ export default function Today() {
   const targetC = macroTarget?.carbs_g ?? 220;
   const targetF = macroTarget?.fat_g ?? 65;
 
-  const today = new Date();
-  const dateLabel = today.toLocaleDateString('en-US', {
+  const isToday = selectedDate.toDateString() === new Date().toDateString();
+
+  const goToPrevDay = () => {
+    const prev = new Date(selectedDate);
+    prev.setDate(prev.getDate() - 1);
+    setSelectedDate(prev);
+  };
+
+  const goToNextDay = () => {
+    if (isToday) return;
+    const next = new Date(selectedDate);
+    next.setDate(next.getDate() + 1);
+    setSelectedDate(next);
+  };
+
+  const fullDateLabel = selectedDate.toLocaleDateString('en-US', {
     weekday: 'long',
     month: 'long',
     day: 'numeric',
   });
+  const dateLabel = isToday ? 'Today' : fullDateLabel;
 
   const initials = profile?.name
     ? profile.name
@@ -731,10 +766,72 @@ export default function Today() {
       >
         <Header
           initials={initials}
-          dateLabel={dateLabel}
+          title={isToday ? 'Today' : 'Past day'}
+          dateLabel={fullDateLabel}
           streak={streak}
           momentum={momentum}
         />
+
+        {/* Date navigator */}
+        <View
+          style={{
+            flexDirection: 'row',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: space.lg,
+            paddingVertical: space.sm,
+          }}
+        >
+          <Pressable onPress={goToPrevDay} hitSlop={12}>
+            <Ionicons name="chevron-back" size={22} color={t.primary} />
+          </Pressable>
+          <Pressable onPress={() => setSelectedDate(new Date())}>
+            <Text
+              style={[
+                typo.subhead,
+                {
+                  color: isToday ? t.primary : t.text,
+                  fontWeight: '600',
+                  minWidth: 160,
+                  textAlign: 'center',
+                },
+              ]}
+            >
+              {dateLabel}
+            </Text>
+          </Pressable>
+          <Pressable
+            onPress={goToNextDay}
+            hitSlop={12}
+            style={{ opacity: isToday ? 0.3 : 1 }}
+          >
+            <Ionicons name="chevron-forward" size={22} color={t.primary} />
+          </Pressable>
+        </View>
+
+        {/* Past-day banner */}
+        {!isToday && (
+          <Pressable
+            onPress={() => setSelectedDate(new Date())}
+            style={({ pressed }) => ({
+              marginHorizontal: space.lg,
+              marginBottom: space.xs,
+              backgroundColor: t.primarySoft,
+              borderRadius: radius.md,
+              paddingHorizontal: space.md,
+              paddingVertical: space.sm,
+              flexDirection: 'row',
+              alignItems: 'center',
+              gap: space.xs,
+              opacity: pressed ? 0.6 : 1,
+            })}
+          >
+            <Ionicons name="time-outline" size={14} color={t.primary} />
+            <Text style={[typo.caption1, { color: t.primary, flex: 1 }]}>
+              Viewing a past day. Tap to return to today.
+            </Text>
+          </Pressable>
+        )}
 
         <View style={{ paddingHorizontal: space.lg, paddingTop: space.md }}>
           <MacroSummaryCard
@@ -751,11 +848,12 @@ export default function Today() {
           target={WATER_TARGET_OZ}
           onAdd={handleAddWater}
           onOpenSheet={() => setWaterSheetOpen(true)}
+          readOnly={!isToday}
         />
 
         {/* How are you feeling? row — hidden once a feeling is logged today,
             and also hidden for the rest of the session if Skipped. */}
-        {!hasFeelingToday && !feelingDismissed && (
+        {isToday && !hasFeelingToday && !feelingDismissed && (
           <Pressable
             onPress={() => router.push('/feeling')}
             style={({ pressed }) => ({
@@ -883,44 +981,50 @@ export default function Today() {
                 { color: t.textTer, marginTop: space.md },
               ]}
             >
-              Nothing logged yet
+              {isToday ? 'Nothing logged yet' : 'Nothing logged this day'}
             </Text>
-            <Text
-              style={[
-                typo.footnote,
-                { color: t.textTer, marginTop: space.xs },
-              ]}
-            >
-              Tap + to log your first meal
-            </Text>
-            <Animated.View
-              style={{
-                marginTop: space.md,
-                transform: [
-                  { translateY: bounceY },
-                  { rotate: '45deg' },
-                ],
-              }}
-            >
-              <Ionicons
-                name="arrow-forward-outline"
-                size={20}
-                color={t.textTer}
-              />
-            </Animated.View>
+            {isToday && (
+              <>
+                <Text
+                  style={[
+                    typo.footnote,
+                    { color: t.textTer, marginTop: space.xs },
+                  ]}
+                >
+                  Tap + to log your first meal
+                </Text>
+                <Animated.View
+                  style={{
+                    marginTop: space.md,
+                    transform: [
+                      { translateY: bounceY },
+                      { rotate: '45deg' },
+                    ],
+                  }}
+                >
+                  <Ionicons
+                    name="arrow-forward-outline"
+                    size={20}
+                    color={t.textTer}
+                  />
+                </Animated.View>
+              </>
+            )}
           </View>
         ) : (
           <View style={{ paddingHorizontal: space.lg, gap: 10 }}>
             {groups.map((g) => (
-              <MealGroupCard key={g.id} group={g} />
+              <MealGroupCard key={g.id} group={g} readOnly={!isToday} />
             ))}
           </View>
         )}
 
-        <LogFoodButton onPress={() => router.push('/log-food')} />
+        {isToday && (
+          <LogFoodButton onPress={() => router.push('/log-food')} />
+        )}
       </ScrollView>
 
-      <Fab onPress={() => router.push('/log-food')} />
+      {isToday && <Fab onPress={() => router.push('/log-food')} />}
 
       <StreakCelebration
         visible={showCelebration}

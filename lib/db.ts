@@ -1,3 +1,4 @@
+import * as FileSystem from 'expo-file-system/legacy';
 import { supabase } from './supabase';
 // HealthKit mirroring disabled until native linking is fixed via Xcode.
 // import { writeNutrition, writeWeight } from './appleHealth';
@@ -750,7 +751,8 @@ export interface ProgressPhotoWithUrl extends ProgressPhoto {
   signedUrl: string;
 }
 
-const SIGNED_URL_TTL_SECONDS = 3600;
+// 2-hour TTL keeps a freshly loaded photo grid valid for the whole session.
+const SIGNED_URL_TTL_SECONDS = 7200;
 
 export const getProgressPhotos = async (
   userId: string,
@@ -760,19 +762,31 @@ export const getProgressPhotos = async (
     .select('*')
     .eq('user_id', userId)
     .order('taken_at', { ascending: false });
+
   if (error) throw error;
-  const photos = (data ?? []) as ProgressPhoto[];
-  if (photos.length === 0) return [];
-  const { data: signed, error: signErr } = await supabase.storage
+  if (!data || data.length === 0) return [];
+
+  const photos = data as ProgressPhoto[];
+  const paths = photos.map((p) => p.storage_path);
+  console.log('Generating signed URLs for paths:', paths);
+
+  const { data: signedUrls, error: urlError } = await supabase.storage
     .from('progress-photos')
-    .createSignedUrls(
-      photos.map((p) => p.storage_path),
-      SIGNED_URL_TTL_SECONDS,
-    );
-  if (signErr) throw signErr;
-  return photos.map((p, i) => ({
-    ...p,
-    signedUrl: signed?.[i]?.signedUrl ?? '',
+    .createSignedUrls(paths, SIGNED_URL_TTL_SECONDS);
+
+  if (urlError) {
+    console.error('Signed URL error:', urlError);
+    return photos.map((p) => ({ ...p, signedUrl: '' }));
+  }
+
+  console.log(
+    'Signed URLs generated:',
+    signedUrls?.map((u) => u.signedUrl?.substring(0, 60)),
+  );
+
+  return photos.map((photo, i) => ({
+    ...photo,
+    signedUrl: signedUrls[i]?.signedUrl ?? '',
   }));
 };
 
@@ -780,26 +794,45 @@ export const addProgressPhoto = async (
   userId: string,
   uri: string,
   takenAt: string,
-): Promise<ProgressPhoto> => {
-  // RN's fetch().blob() works with supabase-js v2 for image uploads; the
-  // storage policy expects the path's first folder segment to equal the
-  // user id (see storage.foldername policy in schema.sql).
-  const response = await fetch(uri);
-  const blob = await response.blob();
-  const path = `${userId}/${Date.now()}.jpg`;
+): Promise<void> => {
+  // RN's fetch().blob() upload fails silently on some devices, so read the
+  // file as base64 and upload the decoded bytes instead. The storage policy
+  // expects the path's first folder segment to equal the user id (see the
+  // storage.foldername policy in schema.sql).
+  const base64 = await FileSystem.readAsStringAsync(uri, {
+    encoding: FileSystem.EncodingType.Base64,
+  });
 
-  const { error: uploadError } = await supabase.storage
+  const filename = `${Date.now()}.jpg`;
+  const path = `${userId}/${filename}`;
+
+  console.log('Uploading photo, path:', path, 'base64 length:', base64.length);
+
+  // Decode base64 to a Uint8Array for upload.
+  const byteCharacters = atob(base64);
+  const byteArray = new Uint8Array(byteCharacters.length);
+  for (let i = 0; i < byteCharacters.length; i++) {
+    byteArray[i] = byteCharacters.charCodeAt(i);
+  }
+
+  const { data, error: uploadError } = await supabase.storage
     .from('progress-photos')
-    .upload(path, blob, { contentType: 'image/jpeg', upsert: false });
+    .upload(path, byteArray, {
+      contentType: 'image/jpeg',
+      upsert: false,
+    });
+
+  console.log('Upload data:', data, 'error:', uploadError);
   if (uploadError) throw uploadError;
 
-  const { data, error } = await supabase
-    .from('progress_photos')
-    .insert({ user_id: userId, storage_path: path, taken_at: takenAt })
-    .select()
-    .single();
+  const { error } = await supabase.from('progress_photos').insert({
+    user_id: userId,
+    storage_path: path,
+    taken_at: takenAt,
+  });
+
   if (error) throw error;
-  return data as ProgressPhoto;
+  console.log('Progress photo saved successfully:', path);
 };
 
 export const deleteProgressPhoto = async (

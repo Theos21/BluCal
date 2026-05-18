@@ -78,6 +78,8 @@ USDA calorie references for portion validation:
 Rules:
 - reference_used: which reference object you used for this specific item, or null
 - reference_objects_detected: full list of references visible in the photo, [] if none
+- For clearly branded or restaurant items (packaging visible, or item is clearly a single standard unit like one slice of toast, one cookie, one burger), set quantity_grams to the standard serving size for that item rather than estimating visually. Standard servings are more accurate than visual gram estimation for packaged/restaurant foods.
+- Only use visual gram estimation for homemade or unpackaged foods where no standard serving exists.
 - confidence: "high" if reference object calibrated or portion clearly visible, "medium" if estimated, "low" if unclear
 - All numeric values must be integers
 - questions: 2-4 SPECIFIC follow-ups that would meaningfully change the calorie estimate
@@ -111,6 +113,8 @@ Return ONLY valid JSON:
 
 Rules:
 - All numeric values must be integers
+- For clearly branded or restaurant items, use the standard serving size rather than estimating portions. Standard servings are more accurate than visual estimation for packaged or restaurant foods.
+- Only estimate portions visually for homemade or unpackaged foods where no standard serving exists.
 - confidence: "high" if portions specified clearly, "medium" if estimated, "low" if unclear`;
 
 const REFINE_PROMPT = (originalItems: unknown[], context: string) =>
@@ -121,6 +125,10 @@ The user provided this additional context:
 ${context}
 
 Refine your estimates based on this context. Cooking method, specific ingredients, and portion sizes significantly affect accuracy. Update the calories and macros accordingly using USDA nutritional data.
+
+Rules:
+- For clearly branded or restaurant items, use the standard serving size rather than estimating portions. Standard servings are more accurate than visual estimation for packaged or restaurant foods.
+- Only estimate portions visually for homemade or unpackaged foods where no standard serving exists.
 
 Return ONLY valid JSON: { "items": [...updated items...], "questions": [] }`;
 

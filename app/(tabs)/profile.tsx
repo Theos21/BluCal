@@ -2,8 +2,10 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  KeyboardAvoidingView,
   Linking,
   Modal,
+  Platform,
   Pressable,
   ScrollView,
   Share,
@@ -587,7 +589,6 @@ function MomentumBanner({
 // ── Screen ───────────────────────────────────────────────────────────────────
 export default function Profile() {
   const t = useTheme();
-  const insets = useSafeAreaInsets();
   const toast = useToast();
   const { user, profile, refreshProfile } = useAuth();
 
@@ -881,6 +882,21 @@ export default function Profile() {
     }
   };
 
+  const handleToggleCommunityFoods = async () => {
+    if (!user) return;
+    const newVal = profile?.show_community_foods === false ? true : false;
+    try {
+      await updateProfile(user.id, { show_community_foods: newVal });
+      await refreshProfile();
+      toast.show(
+        newVal ? 'Community foods enabled.' : 'Community foods hidden.',
+        'success',
+      );
+    } catch {
+      toast.show('Could not update setting.', 'error');
+    }
+  };
+
   const handleExportData = async () => {
     if (!user) return;
     try {
@@ -1140,12 +1156,7 @@ export default function Profile() {
             label="Show community foods"
             icon="people-outline"
             value={profile?.show_community_foods !== false ? 'On' : 'Off'}
-            onPress={async () => {
-              if (!user) return;
-              const newVal = profile?.show_community_foods === false;
-              await updateProfile(user.id, { show_community_foods: newVal });
-              await refreshProfile();
-            }}
+            onPress={handleToggleCommunityFoods}
             isLast
           />
         </Section>
@@ -1328,67 +1339,45 @@ export default function Profile() {
 
       <Modal
         visible={pwdSheetOpen}
-        transparent
         animationType="slide"
+        presentationStyle="formSheet"
         onRequestClose={handleClosePwdSheet}
       >
-        <Pressable
-          onPress={handleClosePwdSheet}
-          style={{
-            flex: 1,
-            backgroundColor: t.scrim,
-            justifyContent: 'flex-end',
-          }}
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          style={{ flex: 1, backgroundColor: t.bg }}
         >
-          <Pressable
-            onPress={(e) => e.stopPropagation()}
-            style={{
-              backgroundColor: t.surface,
-              borderTopLeftRadius: radius.xl,
-              borderTopRightRadius: radius.xl,
-              paddingHorizontal: space.xl,
-              paddingTop: space.lg,
-              paddingBottom: insets.bottom + space.xl,
-            }}
-          >
-            <View style={{ alignItems: 'center' }}>
-              <View
-                style={{
-                  width: 36,
-                  height: 4,
-                  borderRadius: radius.pill,
-                  backgroundColor: t.surface3,
-                }}
-              />
+          <View style={{ padding: space.lg, paddingTop: space.xl }}>
+            <View
+              style={{
+                flexDirection: 'row',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                marginBottom: space.xl,
+              }}
+            >
+              <Text style={[typo.title2, { color: t.text, fontWeight: '700' }]}>
+                Add password
+              </Text>
+              <Pressable hitSlop={8} onPress={handleClosePwdSheet}>
+                <Ionicons name="close-circle" size={28} color={t.textTer} />
+              </Pressable>
             </View>
             <Text
               style={[
-                typo.title3,
-                { color: t.text, textAlign: 'center', marginTop: space.lg },
-              ]}
-            >
-              Add password
-            </Text>
-            <Text
-              style={[
                 typo.subhead,
-                {
-                  color: t.textSec,
-                  textAlign: 'center',
-                  marginTop: space.xs,
-                },
+                { color: t.textSec, marginBottom: space.lg },
               ]}
             >
-              Set a password so you can also sign in with email.
+              Add a password so you can also sign in with your email address.
             </Text>
-
-            <View style={{ marginTop: space.xl, gap: space.md }}>
+            <View style={{ gap: space.md }}>
               <View
                 style={{
                   flexDirection: 'row',
                   alignItems: 'center',
-                  backgroundColor: t.surface2,
-                  borderRadius: radius.md,
+                  backgroundColor: t.surface,
+                  borderRadius: radius.lg,
                   paddingHorizontal: 14,
                 }}
               >
@@ -1401,6 +1390,7 @@ export default function Profile() {
                   autoCapitalize="none"
                   autoCorrect={false}
                   textContentType="newPassword"
+                  autoFocus
                   style={[
                     typo.body,
                     { flex: 1, color: t.text, paddingVertical: 12 },
@@ -1421,41 +1411,35 @@ export default function Profile() {
                   />
                 </Pressable>
               </View>
-              <View
-                style={{
-                  flexDirection: 'row',
-                  alignItems: 'center',
-                  backgroundColor: t.surface2,
-                  borderRadius: radius.md,
-                  paddingHorizontal: 14,
-                }}
-              >
-                <TextInput
-                  value={confirmPwd}
-                  onChangeText={setConfirmPwd}
-                  placeholder="Confirm password"
-                  placeholderTextColor={t.textTer}
-                  secureTextEntry={!showPwd}
-                  autoCapitalize="none"
-                  autoCorrect={false}
-                  textContentType="newPassword"
-                  style={[
-                    typo.body,
-                    { flex: 1, color: t.text, paddingVertical: 12 },
-                  ]}
-                />
-              </View>
+              <TextInput
+                value={confirmPwd}
+                onChangeText={setConfirmPwd}
+                placeholder="Confirm password"
+                placeholderTextColor={t.textTer}
+                secureTextEntry={!showPwd}
+                autoCapitalize="none"
+                autoCorrect={false}
+                textContentType="newPassword"
+                returnKeyType="done"
+                onSubmitEditing={handleAddPassword}
+                style={[
+                  typo.body,
+                  {
+                    backgroundColor: t.surface,
+                    borderRadius: radius.lg,
+                    paddingHorizontal: 14,
+                    paddingVertical: 12,
+                    color: t.text,
+                  },
+                ]}
+              />
             </View>
 
             {pwdError && (
               <Text
                 style={[
                   typo.footnote,
-                  {
-                    color: t.danger,
-                    marginTop: space.md,
-                    textAlign: 'center',
-                  },
+                  { color: t.danger, marginTop: space.md },
                 ]}
               >
                 {pwdError}
@@ -1464,16 +1448,15 @@ export default function Profile() {
 
             <Pressable
               onPress={handleAddPassword}
-              disabled={savingPwd || !newPwd || !confirmPwd}
+              disabled={savingPwd || !newPwd || newPwd !== confirmPwd}
               style={({ pressed }) => ({
-                marginTop: space.xl,
-                height: 52,
-                borderRadius: radius.lg,
                 backgroundColor: t.primary,
+                borderRadius: radius.lg,
+                padding: space.md,
                 alignItems: 'center',
-                justifyContent: 'center',
+                marginTop: space.xl,
                 opacity:
-                  savingPwd || !newPwd || !confirmPwd
+                  savingPwd || !newPwd || newPwd !== confirmPwd
                     ? 0.4
                     : pressed
                       ? 0.85
@@ -1483,24 +1466,18 @@ export default function Profile() {
               {savingPwd ? (
                 <ActivityIndicator color={t.textOnPrim} />
               ) : (
-                <Text style={[typo.headline, { color: t.textOnPrim }]}>
-                  Save
+                <Text
+                  style={[
+                    typo.subhead,
+                    { color: t.textOnPrim, fontWeight: '700' },
+                  ]}
+                >
+                  Save password
                 </Text>
               )}
             </Pressable>
-            <Pressable
-              hitSlop={6}
-              onPress={handleClosePwdSheet}
-              style={({ pressed }) => ({
-                alignSelf: 'center',
-                marginTop: space.md,
-                opacity: pressed ? 0.6 : 1,
-              })}
-            >
-              <Text style={[typo.subhead, { color: t.textSec }]}>Cancel</Text>
-            </Pressable>
-          </Pressable>
-        </Pressable>
+          </View>
+        </KeyboardAvoidingView>
       </Modal>
 
       <Modal

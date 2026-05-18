@@ -5,9 +5,10 @@ import type { MealGroup } from '../lib/groupEntries';
 
 type Props = {
   group: MealGroup;
+  readOnly?: boolean;
 };
 
-export default function MealGroupCard({ group }: Props) {
+export default function MealGroupCard({ group, readOnly }: Props) {
   const t = useTheme();
 
   return (
@@ -92,6 +93,7 @@ export default function MealGroupCard({ group }: Props) {
                     saturated_fat_g: String(item.saturated_fat_g ?? 0),
                     cholesterol_mg: String(item.cholesterol_mg ?? 0),
                     logged_at: item.logged_at,
+                    readOnly: readOnly ? '1' : '',
                   },
                 })
               }

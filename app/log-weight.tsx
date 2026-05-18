@@ -686,6 +686,13 @@ export default function LogWeight() {
                       source={{ uri: photo.signedUrl }}
                       style={{ width: '100%', height: '100%' }}
                       resizeMode="cover"
+                      onError={(e) =>
+                        console.error(
+                          'Image load failed:',
+                          photo.storage_path,
+                          e.nativeEvent.error,
+                        )
+                      }
                     />
                     <View
                       style={{
@@ -820,6 +827,13 @@ export default function LogWeight() {
                   source={{ uri: selectedPhoto.signedUrl }}
                   style={{ width: '100%', height: '100%' }}
                   resizeMode="contain"
+                  onError={(e) =>
+                    console.error(
+                      'Image load failed:',
+                      selectedPhoto.storage_path,
+                      e.nativeEvent.error,
+                    )
+                  }
                 />
               </Pressable>
               <Pressable

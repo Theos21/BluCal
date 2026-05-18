@@ -142,7 +142,10 @@ export default function EntryDetail() {
     saturated_fat_g?: string;
     cholesterol_mg?: string;
     logged_at?: string;
+    readOnly?: string;
   }>();
+
+  const readOnly = params.readOnly === '1';
 
   const id = params.id;
   const name = params.name ?? '';
@@ -444,27 +447,29 @@ export default function EntryDetail() {
           </Text>
         </View>
 
-        {/* Delete entry */}
-        <View style={{ paddingHorizontal: space.xl, marginTop: space.xl }}>
-          <Pressable
-            onPress={handleDelete}
-            style={({ pressed }) => ({
-              height: 48,
-              borderRadius: radius.lg,
-              backgroundColor: t.dangerSoft,
-              alignItems: 'center',
-              justifyContent: 'center',
-              flexDirection: 'row',
-              gap: space.sm,
-              opacity: pressed ? 0.6 : 1,
-            })}
-          >
-            <Ionicons name="trash-outline" size={18} color={t.danger} />
-            <Text style={[typo.subheadEm, { color: t.danger }]}>
-              Delete entry
-            </Text>
-          </Pressable>
-        </View>
+        {/* Delete entry — hidden when viewing a past day in read-only mode */}
+        {!readOnly && (
+          <View style={{ paddingHorizontal: space.xl, marginTop: space.xl }}>
+            <Pressable
+              onPress={handleDelete}
+              style={({ pressed }) => ({
+                height: 48,
+                borderRadius: radius.lg,
+                backgroundColor: t.dangerSoft,
+                alignItems: 'center',
+                justifyContent: 'center',
+                flexDirection: 'row',
+                gap: space.sm,
+                opacity: pressed ? 0.6 : 1,
+              })}
+            >
+              <Ionicons name="trash-outline" size={18} color={t.danger} />
+              <Text style={[typo.subheadEm, { color: t.danger }]}>
+                Delete entry
+              </Text>
+            </Pressable>
+          </View>
+        )}
       </ScrollView>
 
       {/* Unit picker */}

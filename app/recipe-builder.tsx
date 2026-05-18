@@ -781,6 +781,9 @@ export default function RecipeBuilder() {
             justifyContent: 'flex-end',
           }}
         >
+          <KeyboardAvoidingView
+            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          >
           <Pressable
             onPress={(e) => e.stopPropagation()}
             style={{
@@ -878,6 +881,7 @@ export default function RecipeBuilder() {
               </Text>
             </Pressable>
           </Pressable>
+          </KeyboardAvoidingView>
         </Pressable>
       </Modal>
 
@@ -1035,7 +1039,11 @@ export default function RecipeBuilder() {
           presentationStyle="formSheet"
           onRequestClose={() => setShowIngredientQuantity(false)}
         >
-          <View style={{ flex: 1, backgroundColor: t.bg, padding: space.lg }}>
+          <KeyboardAvoidingView
+            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+            style={{ flex: 1, backgroundColor: t.bg }}
+          >
+          <View style={{ flex: 1, padding: space.lg }}>
             <Text
               style={[
                 typo.title2,
@@ -1237,6 +1245,7 @@ export default function RecipeBuilder() {
               </Pressable>
             </View>
           </View>
+          </KeyboardAvoidingView>
         </Modal>
       </Modal>
 

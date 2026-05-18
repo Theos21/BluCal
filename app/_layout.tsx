@@ -1,11 +1,13 @@
 import React, { useEffect } from 'react';
-import { ActivityIndicator, Text, View } from 'react-native';
+import { Text, View } from 'react-native';
 import { Stack, useRouter } from 'expo-router';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import * as Linking from 'expo-linking';
-import { useTheme } from '../lib/theme';
+import { dark, useTheme } from '../lib/theme';
 import { AuthProvider, useAuth } from '../lib/AuthContext';
+import { BluCalWordmark } from '../components/BluCalWordmark';
+import { LogoMark } from '../components/LogoMark';
 import { supabase } from '../lib/supabase';
 import * as SplashScreen from 'expo-splash-screen';
 
@@ -133,19 +135,23 @@ function RootNavigator() {
   }, [router, refreshProfile]);
 
   if (!isReady || (session && profile === undefined)) {
-    // Cold-boot loading state. The theme context may not be ready yet, so it
-    // uses the hardcoded dark app background — matching app.json's splash
-    // backgroundColor — so the splash -> app handoff has no white flash.
+    // Cold-boot loading state. Shows the same logo + wordmark as the native
+    // splash (app.json's dark backgroundColor) so the splash -> app handoff
+    // has no flash. The native splash is always dark, so this uses the `dark`
+    // palette tokens directly rather than the device-theme palette.
     return (
       <View
         style={{
           flex: 1,
           justifyContent: 'center',
           alignItems: 'center',
-          backgroundColor: '#18191D',
+          backgroundColor: dark.bg,
         }}
       >
-        <ActivityIndicator size="large" color="#4F95DC" />
+        <LogoMark size={80} color={dark.primary} />
+        <View style={{ marginTop: 16 }}>
+          <BluCalWordmark size={34} onDark />
+        </View>
       </View>
     );
   }

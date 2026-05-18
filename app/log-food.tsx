@@ -3,7 +3,9 @@ import {
   ActivityIndicator,
   Alert,
   Animated,
+  KeyboardAvoidingView,
   Modal,
+  Platform,
   Pressable,
   ScrollView,
   Text,
@@ -1399,7 +1401,11 @@ export default function LogFood() {
         presentationStyle="formSheet"
         onRequestClose={() => setLoggingRecipe(null)}
       >
-        <View style={{ flex: 1, backgroundColor: t.bg, padding: space.lg }}>
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          style={{ flex: 1, backgroundColor: t.bg }}
+        >
+        <View style={{ flex: 1, padding: space.lg }}>
           <Text
             style={[
               typo.title2,
@@ -1584,6 +1590,7 @@ export default function LogFood() {
             </Text>
           </Pressable>
         </View>
+        </KeyboardAvoidingView>
       </Modal>
 
       <FoodDetailSheet

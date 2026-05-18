@@ -8,54 +8,12 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
-import Svg, { Circle, Path } from 'react-native-svg';
+import Svg, { Path } from 'react-native-svg';
 import * as AppleAuthentication from 'expo-apple-authentication';
 import { radius, space, type as typo, useTheme, type Theme } from '../../lib/theme';
 import { signInWithApple, signInWithGoogle } from '../../lib/socialAuth';
 import { BluCalWordmark } from '../../components/BluCalWordmark';
-
-function LogoMark({ size, color }: { size: number; color: string }) {
-  return (
-    <Svg width={size} height={size} viewBox="0 0 80 80">
-      <Circle
-        cx={40}
-        cy={40}
-        r={32}
-        stroke={color}
-        strokeWidth={5.5}
-        strokeLinecap="round"
-        strokeDasharray="167 34"
-        strokeDashoffset={25}
-        fill="none"
-      />
-      <Circle
-        cx={40}
-        cy={40}
-        r={21}
-        stroke={color}
-        strokeWidth={4.5}
-        strokeLinecap="round"
-        strokeDasharray="110 22"
-        strokeDashoffset={17}
-        strokeOpacity={0.65}
-        fill="none"
-      />
-      <Circle
-        cx={40}
-        cy={40}
-        r={10}
-        stroke={color}
-        strokeWidth={3.5}
-        strokeLinecap="round"
-        strokeDasharray="52 10"
-        strokeDashoffset={8}
-        strokeOpacity={0.35}
-        fill="none"
-      />
-      <Circle cx={40} cy={40} r={3.5} fill={color} />
-    </Svg>
-  );
-}
+import { LogoMark } from '../../components/LogoMark';
 
 // Google's official "G" logo. Four-color SVG path data from Google's brand
 // guidelines — required by their sign-in branding rules.

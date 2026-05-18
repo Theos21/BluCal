@@ -70,7 +70,15 @@ function entryToDetailFood(entry: FoodEntry): CustomFood {
   };
 }
 
-function Header({ initials, streak }: { initials: string; streak: number }) {
+function Header({
+  initials,
+  streak,
+  date,
+}: {
+  initials: string;
+  streak: number;
+  date: string;
+}) {
   const t = useTheme();
   return (
     <View
@@ -83,7 +91,12 @@ function Header({ initials, streak }: { initials: string; streak: number }) {
         justifyContent: 'space-between',
       }}
     >
-      <BluCalWordmark size={22} />
+      <View>
+        <BluCalWordmark size={22} />
+        <Text style={[typo.subhead, { color: t.textSec, marginTop: 2 }]}>
+          {date}
+        </Text>
+      </View>
       <View
         style={{ flexDirection: 'row', alignItems: 'center', gap: space.sm }}
       >
@@ -761,7 +774,7 @@ export default function Today() {
           />
         }
       >
-        <Header initials={initials} streak={streak} />
+        <Header initials={initials} streak={streak} date={fullDateLabel} />
 
         {/* Date navigator — its own centered row just below the header */}
         <View

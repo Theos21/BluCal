@@ -1,6 +1,7 @@
 import * as AppleAuthentication from 'expo-apple-authentication';
 import * as WebBrowser from 'expo-web-browser';
 import { Platform } from 'react-native';
+import { sessionState } from './sessionState';
 import { supabase } from './supabase';
 
 // Closes the OAuth web browser session immediately when the redirect URI is
@@ -43,6 +44,9 @@ export const signInWithApple = async (): Promise<void> => {
         .filter(Boolean)
         .join(' ');
       await supabase.from('profiles').update({ name }).eq('id', user.id);
+      // Record the name in session state so onboarding can hide the name
+      // field immediately, without waiting for the profile row to reload.
+      sessionState.setAppleSignInName(name);
     }
   }
 };

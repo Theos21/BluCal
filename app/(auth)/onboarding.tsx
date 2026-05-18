@@ -18,6 +18,7 @@ import { router } from 'expo-router';
 import { radius, space, type as typo, useTheme, type Theme } from '../../lib/theme';
 import { useAuth } from '../../lib/AuthContext';
 import { addWeightEntry, setMacroTarget, upsertProfile } from '../../lib/db';
+import { sessionState } from '../../lib/sessionState';
 import Toast from '../../components/Toast';
 import { useToast } from '../../lib/useToast';
 import type { ActivityLevel, BiologicalSex, Goal, Pace } from '../../lib/types';
@@ -549,7 +550,9 @@ export default function Onboarding() {
   }, [step, checkmarkScale, checkmarkOpacity, contentOpacity]);
 
   const [goal, setGoal] = useState<string | null>(null);
-  const [name, setName] = useState(profile?.name ?? '');
+  const [name, setName] = useState(
+    profile?.name ?? sessionState.getAppleSignInName() ?? '',
+  );
 
   useEffect(() => {
     if (profile?.name && !name) setName(profile.name);
@@ -815,7 +818,7 @@ export default function Onboarding() {
                 Tell us about yourself
               </Text>
 
-              {!profile?.name && (
+              {!profile?.name && !sessionState.getAppleSignInName() && (
                 <View style={{ marginTop: space.xl }}>
                   <Text
                     style={[

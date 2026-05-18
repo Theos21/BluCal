@@ -9,6 +9,10 @@ let _bluAITipDismissed = false;
 // recipe) so a screen regaining focus knows to refetch its lists immediately
 // rather than waiting for a pull-to-refresh.
 let _needsRefresh = false;
+// Name captured from Apple Sign In's credential.fullName. Set immediately on
+// sign-in so onboarding can hide the name field even before the profile row
+// has loaded from Supabase.
+let _appleSignInName: string | null = null;
 
 export const sessionState = {
   getFeelingDismissed: () => _feelingDismissed,
@@ -30,5 +34,9 @@ export const sessionState = {
   getBluAITipDismissed: () => _bluAITipDismissed,
   setBluAITipDismissed: () => {
     _bluAITipDismissed = true;
+  },
+  getAppleSignInName: () => _appleSignInName,
+  setAppleSignInName: (name: string | null) => {
+    _appleSignInName = name;
   },
 };
